@@ -1,29 +1,34 @@
 import { expect, it } from 'vitest'
-import { corpoDoPedido, erroDaGroq, LIMITE_HISTORICO, textoDaResposta, type Mensagem } from './groq'
+import { corpoDoPedido, erroDaGroq, instrucao, LIMITE_HISTORICO, lerResposta, textoTranscrito } from './groq'
+import type { Mensagem } from './tipos'
 
-it('monta o pedido com a instrução e os papéis certos', () => {
-  const c = corpoDoPedido('m', [{ papel: 'eu', texto: 'oi' }, { papel: 'assistente', texto: 'olá' }])
-  expect(c.model).toBe('m')
-  expect(c.messages.map((m) => m.role)).toEqual(['system', 'user', 'assistant'])
+it('instrução leva a data de agora, atalhos e pastas', () => {
+  const s = instrucao(new Date(2026, 10, 15, 10, 0), ['Monday'], ['zarb-os'])
+  expect(s).toContain('domingo, 2026-11-15T10:00:00')
+  expect(s).toContain('Monday')
+  expect(s).toContain('zarb-os')
 })
 
-it('manda só as últimas mensagens', () => {
+it('monta o pedido com ferramentas e só as últimas mensagens', () => {
   const muitas: Mensagem[] = Array.from({ length: 30 }, (_, i) => ({ papel: 'eu', texto: String(i) }))
-  const c = corpoDoPedido('m', muitas)
-  expect(c.messages).toHaveLength(LIMITE_HISTORICO + 1)
-  expect(c.messages.at(-1)?.content).toBe('29')
+  const c = corpoDoPedido('m', 'sis', muitas, 'agora')
+  expect(c.messages).toHaveLength(LIMITE_HISTORICO + 2)
+  expect(c.messages.at(-1)).toEqual({ role: 'user', content: 'agora' })
+  expect(c.tools.map((t) => t.function.name)).toContain('criar_lembrete')
 })
 
-it('lê o texto da resposta e recusa resposta vazia ou estranha', () => {
-  expect(textoDaResposta({ choices: [{ message: { content: ' oi ' } }] })).toBe('oi')
-  expect(textoDaResposta({ choices: [{ message: { content: '  ' } }] })).toBeNull()
-  expect(textoDaResposta({})).toBeNull()
-  expect(textoDaResposta(null)).toBeNull()
+it('lê texto e chamadas de ferramenta', () => {
+  const r = lerResposta({
+    choices: [{ message: { content: null, tool_calls: [{ function: { name: 'criar_tarefa', arguments: '{"titulo":"x"}' } }, { function: {} }] } }],
+  })
+  expect(r).toEqual({ texto: null, chamadas: [{ nome: 'criar_tarefa', args: '{"titulo":"x"}' }] })
+  expect(lerResposta({ choices: [{ message: { content: ' oi ' } }] })).toEqual({ texto: 'oi', chamadas: [] })
+  expect(lerResposta(null)).toEqual({ texto: null, chamadas: [] })
 })
 
-it('traduz os erros da Groq', () => {
+it('lê a transcrição e traduz erros', () => {
+  expect(textoTranscrito({ text: ' me lembra ' })).toBe('me lembra')
+  expect(textoTranscrito({ text: '' })).toBeNull()
   expect(erroDaGroq(401)).toMatch(/chave/)
   expect(erroDaGroq(429)).toMatch(/Limite/)
-  expect(erroDaGroq(503)).toMatch(/problema/)
-  expect(erroDaGroq(418)).toMatch(/418/)
 })

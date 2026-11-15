@@ -4,8 +4,13 @@ directories:
   output: dist
 files:
   - out/**
-  - resources/**
   - package.json
+# Fora do pacote: ícone da bandeja e o reconhecedor de voz offline (baixado na montagem).
+extraResources:
+  - from: resources
+    to: .
+    filter:
+      - '**/*'
 win:
   target: nsis
   icon: build/icon.png
@@ -13,3 +18,4 @@ nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
+  shortcutName: Assistente Zarb

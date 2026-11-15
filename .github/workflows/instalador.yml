@@ -19,6 +19,17 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      # Reconhecedor offline do "Ei, Zarb" (Vosk, português, ~31 MB). Fica fora do git.
+      # atalho: o arquivo não é conferido por hash; o SHA-256 sai no log. Melhorar: fixar o hash aqui.
+      - name: Reconhecedor de voz offline
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://alphacephei.com/vosk/models/vosk-model-small-pt-0.3.zip -OutFile voz.zip
+          (Get-FileHash voz.zip -Algorithm SHA256).Hash
+          Expand-Archive voz.zip -DestinationPath voz-tmp
+          New-Item -ItemType Directory -Force resources/voz | Out-Null
+          tar -czf resources/voz/modelo-pt.tar.gz -C voz-tmp vosk-model-small-pt-0.3
+          Get-Item resources/voz/modelo-pt.tar.gz | Select-Object Length
       - run: npm run dist
       - uses: actions/upload-artifact@v4
         with:

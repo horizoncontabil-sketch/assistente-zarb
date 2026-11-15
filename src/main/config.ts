@@ -1,49 +1,62 @@
-import { app, safeStorage } from 'electron'
-import { readFileSync, renameSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { safeStorage } from 'electron'
+import { gravarJson, lerJson } from './armazem'
 import { MODELO_PADRAO } from '../shared/groq'
+import type { PastaClaude } from '../shared/tipos'
 
-type Gravado = {
+export type Gravado = {
   atalhoAbrir: string
+  atalhoFalar: string
+  atalhoCopiados: string
   modelo: string
-  // Chave da Groq cifrada pelo Windows (DPAPI, via safeStorage), em base64. Nunca em texto puro.
+  entalhoSempreVisivel: boolean
+  responderFalando: boolean
+  chamadoPorVoz: boolean
+  copiasAtivas: boolean
+  avisoEventoMin: number
+  copiarLembretesParaAgenda: boolean
+  pastasClaude: PastaClaude[]
+  googleClientId?: string
+  // Segredos cifrados pelo Windows (DPAPI, via safeStorage), em base64. Nunca em texto puro.
   groqCifrada?: string
+  googleSegredoCifrado?: string
+  googleTokensCifrados?: string
+  googleEmail?: string
 }
 
-const PADRAO: Gravado = { atalhoAbrir: 'Control+Space', modelo: MODELO_PADRAO }
-
-const arquivo = () => join(app.getPath('userData'), 'config.json')
+const PADRAO: Gravado = {
+  atalhoAbrir: 'Control+Space',
+  atalhoFalar: 'Control+Shift+Space',
+  atalhoCopiados: 'Control+Shift+V',
+  modelo: MODELO_PADRAO,
+  entalhoSempreVisivel: true,
+  responderFalando: true,
+  chamadoPorVoz: false,
+  copiasAtivas: true,
+  avisoEventoMin: 10,
+  copiarLembretesParaAgenda: false,
+  pastasClaude: [],
+}
 
 export function ler(): Gravado {
-  try {
-    return { ...PADRAO, ...JSON.parse(readFileSync(arquivo(), 'utf8')) }
-  } catch {
-    return { ...PADRAO }
-  }
+  return { ...PADRAO, ...lerJson<Partial<Gravado>>('config', {}) }
 }
 
 export function gravar(mudanca: Partial<Gravado>): Gravado {
   const novo = { ...ler(), ...mudanca }
-  const tmp = arquivo() + '.tmp'
-  writeFileSync(tmp, JSON.stringify(novo, null, 2))
-  renameSync(tmp, arquivo())
+  for (const k of Object.keys(novo) as (keyof Gravado)[]) if (novo[k] === undefined) delete novo[k]
+  gravarJson('config', novo)
   return novo
 }
 
-export function guardarChave(chave: string) {
+export function cifrar(texto: string): string {
   if (!safeStorage.isEncryptionAvailable()) throw new Error('O cofre do Windows não está disponível.')
-  gravar({ groqCifrada: safeStorage.encryptString(chave.trim()).toString('base64') })
+  return safeStorage.encryptString(texto).toString('base64')
 }
 
-export function apagarChave() {
-  gravar({ groqCifrada: undefined })
-}
-
-export function chaveGroq(): string | null {
-  const c = ler().groqCifrada
-  if (!c) return null
+export function decifrar(base64: string | undefined): string | null {
+  if (!base64) return null
   try {
-    return safeStorage.decryptString(Buffer.from(c, 'base64'))
+    return safeStorage.decryptString(Buffer.from(base64, 'base64'))
   } catch {
     return null
   }

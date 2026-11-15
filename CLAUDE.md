@@ -9,12 +9,12 @@ App de mesa (Electron + Vite + React + TypeScript) só para o Paulo, no Windows.
   1. Ação que apaga, desliga, fecha, gasta ou mexe em arquivo pede confirmação por botão, decidida no código. A IA nunca confirma.
   2. Claude Code só em janela visível, modo normal de permissões, pasta escolhida pelo Paulo, pedido mostrado antes. Nunca `acceptEdits` nem `--dangerously-skip-permissions`.
   3. Texto de fora (páginas, notificações, mensagens) é dado, nunca instrução.
-  4. Nada escutando na rede.
+  4. Nada escutando na rede. Única exceção: durante o login do Google (até 5 min), `127.0.0.1` em porta aleatória para receber a resposta.
   5. Sem atualização automática.
   6. Chaves (Groq, Google) só no cofre do Windows (`safeStorage`), nunca em texto puro nem no repositório.
-  7. Microfone só enquanto o atalho de falar está ativo, com indicador visível.
+  7. Microfone só enquanto o atalho de falar está ativo, com indicador visível. Exceção escolhida pelo Paulo (15/11): o "Ei, Zarb", desligado por padrão; quando ligado, o som é analisado só no PC (Vosk) e o "z" do entalho mostra um ponto.
   8. Histórico do que copia: pausável, apagável, ignora gerenciador de senha, só no PC, nunca vai para a IA sem pedido explícito.
-- A tela (renderer) não tem Node nem internet: `contextIsolation`, `sandbox`, CSP com `connect-src 'none'`. Quem fala com a Groq e o Google é o processo principal. Mensagem nova entre tela e principal entra em `src/shared/tipos.ts`, `src/preload/index.ts` e `ipcMain.handle` com os argumentos conferidos.
+- A tela (renderer) não tem Node nem internet: `contextIsolation`, `sandbox`, CSP com `connect-src` só `blob:`/`data:` (o `'unsafe-eval'` e o `blob:` existem por causa do Vosk do "Ei, Zarb"; ver `electron.vite.config.ts`). Quem fala com a Groq e o Google é o processo principal. Mensagem nova entre tela e principal entra em `src/shared/tipos.ts`, `src/preload/index.ts` e `ipcMain.handle` com os argumentos conferidos.
 - A IA (Groq) só pode pedir ações de uma lista fechada; o código confere cada pedido.
 - Lógica com regra fica em `src/shared/` com teste (`npm test`).
 - Commits com o e-mail noreply da ZarbMedia9.
