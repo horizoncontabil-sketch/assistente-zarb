@@ -1,6 +1,8 @@
 import { hora, mesmoDia } from '../../../shared/datas'
 import { eventosDoDia } from '../../../shared/google'
 import { ehDiaDele, feitoNoDia, numero, progresso, sequencia } from '../../../shared/habitos'
+import { totaisDoDia } from '../../../shared/alimentacao'
+import { diaLocal } from '../../../shared/datas'
 import type { Evento, Tarefa } from '../../../shared/tipos'
 import { Compositor, type PropsPainel } from '../Painel'
 import { Icone } from '../icones'
@@ -79,6 +81,8 @@ export function Hoje({ dados, agora, setAba, enviar, gravacao, entrada }: PropsP
             )}
           </div>
         </section>
+
+        <ComidaDeHoje dados={dados} agora={agora} irPara={() => setAba('alimentacao')} />
 
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.45fr) minmax(0, 1fr)', gap: 14 }}>
           <section className="cartao" aria-label="A seguir">
@@ -194,5 +198,34 @@ function LinhaDoDia({ eventos, lembretes, agora }: { eventos: Evento[]; lembrete
         </span>
       ))}
     </div>
+  )
+}
+
+// Uma linha com a dieta do dia; clicar leva à Alimentação.
+function ComidaDeHoje({ dados, agora, irPara }: { dados: PropsPainel['dados']; agora: Date; irPara: () => void }) {
+  const p = dados.saude.plano
+  if (!p) return null
+  const t = totaisDoDia(dados.saude.refeicoes, diaLocal(agora))
+  const barra = (atual: number, meta: number) => (
+    <span className="barra-progresso" style={{ flex: 1 }}>
+      <span style={{ width: `${Math.round(Math.min(1, atual / meta) * 100)}%`, background: atual > meta * 1.05 ? 'var(--ambar)' : undefined }} />
+    </span>
+  )
+  return (
+    <button type="button" className="cartao" onClick={irPara} style={{ flexDirection: 'row', alignItems: 'center', gap: 18, textAlign: 'left', padding: '14px 18px' }} aria-label="Abrir Alimentação">
+      <strong style={{ width: 70 }}>Comida</strong>
+      <span style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span className="meta" style={{ width: 120 }}>
+          {t.kcal.toLocaleString('pt-BR')} de {p.kcal.toLocaleString('pt-BR')} kcal
+        </span>
+        {barra(t.kcal, p.kcal)}
+      </span>
+      <span style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span className="meta" style={{ width: 130 }}>
+          {Math.round(t.p)} de {p.proteina} g proteína
+        </span>
+        {barra(t.p, p.proteina)}
+      </span>
+    </button>
   )
 }

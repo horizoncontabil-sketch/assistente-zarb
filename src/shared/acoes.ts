@@ -110,6 +110,49 @@ export const FERRAMENTAS = [
       required: ['acao'],
     },
   },
+  {
+    name: 'registrar_refeicao',
+    description: 'Registra o que o Paulo comeu, com contagem completa. Separe cada alimento com a quantidade. O Paulo confere antes de salvar.',
+    parameters: {
+      type: 'object',
+      properties: {
+        tipo: { type: 'string', enum: ['cafe', 'almoco', 'lanche', 'jantar', 'ceia', 'livre'] },
+        itens: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              alimento: texto('Nome do alimento como na tabela brasileira, com o preparo: "peito de frango grelhado", "arroz branco cozido", "feijão carioca cozido".'),
+              gramas: { type: 'number', description: 'Gramas, se ele disse ou se dá para estimar com segurança.' },
+              medida: texto('Medida caseira, se ele falou assim: "colher de sopa", "concha", "unidade", "fatia".'),
+              quantidade: { type: 'number', description: 'Quantas medidas.' },
+              kcal_100g: { type: 'number', description: 'Só para produto de rótulo (whey, barra): kcal por 100 g.' },
+              proteina_100g: { type: 'number' },
+              carbo_100g: { type: 'number' },
+              gordura_100g: { type: 'number' },
+            },
+            required: ['alimento'],
+          },
+        },
+      },
+      required: ['itens'],
+    },
+  },
+  {
+    name: 'registrar_corpo',
+    description: 'Guarda medidas do Paulo de hoje: peso, abdômen, % de gordura da balança, pressão, ou que ele treinou.',
+    parameters: {
+      type: 'object',
+      properties: {
+        peso: { type: 'number', description: 'kg' },
+        abdomen: { type: 'number', description: 'cm' },
+        gordura: { type: 'number', description: '% de gordura' },
+        pressao_sistolica: { type: 'integer' },
+        pressao_diastolica: { type: 'integer' },
+        treino: { type: 'boolean', description: 'true se ele treinou hoje' },
+      },
+    },
+  },
 ] as const
 
 export type AcaoPc = 'bloquear' | 'suspender' | 'reiniciar' | 'desligar'
@@ -126,6 +169,10 @@ export type Acao =
   | { tipo: 'habito'; habito: Habito; quantidade: number }
   | { tipo: 'volume'; mudanca: MudancaVolume }
   | { tipo: 'pc'; acao: AcaoPc }
+  | { tipo: 'refeicao'; args: { tipo?: unknown; itens?: unknown } }
+  | { tipo: 'corpo'; medidas: MedidasCorpo }
+
+export type MedidasCorpo = { peso?: number; abdomen?: number; gordura?: number; pressaoSis?: number; pressaoDia?: number; treino?: boolean }
 
 export type Contexto = { agora: Date; atalhos: Atalho[]; pastas: PastaClaude[]; tarefas: Tarefa[]; habitos: Habito[] }
 
@@ -215,6 +262,21 @@ export function validarAcao(nome: string, argsJson: string, ctx: Contexto): Resu
       return acao === 'bloquear' || acao === 'suspender' || acao === 'reiniciar' || acao === 'desligar'
         ? { ok: true, acao: { tipo: 'pc', acao } }
         : { ok: false, erro: 'Não entendi o que fazer com o PC.' }
+    }
+    case 'registrar_refeicao':
+      return Array.isArray(a.itens) && a.itens.length ? { ok: true, acao: { tipo: 'refeicao', args: a } } : { ok: false, erro: 'O que você comeu?' }
+    case 'registrar_corpo': {
+      const faixa = (v: unknown, min: number, max: number) => (typeof v === 'number' && v >= min && v <= max ? Math.round(v * 10) / 10 : undefined)
+      const medidas: MedidasCorpo = {
+        peso: faixa(a.peso, 30, 250),
+        abdomen: faixa(a.abdomen, 40, 200),
+        gordura: faixa(a.gordura, 3, 60),
+        pressaoSis: faixa(a.pressao_sistolica, 70, 250),
+        pressaoDia: faixa(a.pressao_diastolica, 40, 150),
+        treino: typeof a.treino === 'boolean' ? a.treino : undefined,
+      }
+      Object.keys(medidas).forEach((k) => medidas[k as keyof MedidasCorpo] === undefined && delete medidas[k as keyof MedidasCorpo])
+      return Object.keys(medidas).length ? { ok: true, acao: { tipo: 'corpo', medidas } } : { ok: false, erro: 'Não entendi a medida.' }
     }
     default:
       return { ok: false, erro: 'Pedido fora do que eu sei fazer.' }

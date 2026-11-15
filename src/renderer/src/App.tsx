@@ -5,7 +5,6 @@ import { ehDiaDele, feitoNoDia } from '../../shared/habitos'
 import { horizontal, type Borda } from '../../shared/posicao'
 import type { Aba, Aviso, Cartao, Mensagem, Resposta } from '../../shared/tipos'
 import { Avisos } from './Alerta'
-import marcaZ from './assets/z-marca.png'
 import { Painel } from './Painel'
 import { usarAgora, usarDados, type Dados } from './usarDados'
 import { usarChamado, usarGravacao } from './usarVoz'
@@ -200,7 +199,7 @@ export function App() {
 
   const marca = (
     <span className={`marca-casca ${chamado === 'escutando' ? 'atento' : ''}`} title={chamado === 'escutando' ? 'Ouvindo o "Ei, Zarb"' : undefined}>
-      <img className="marca" src={marcaZ} alt="" />
+      <span className="marca-anel" aria-hidden="true" />
     </span>
   )
 
@@ -352,6 +351,7 @@ function desfazerDe(cartoes: Cartao[]): (() => void) | undefined {
   const fns = cartoes.flatMap((c) => {
     if (c.tipo === 'tarefa') return [() => api.apagarTarefa(c.tarefa.id)]
     if (c.tipo === 'concluida') return [() => api.reabrirTarefa(c.tarefa.id)]
+    if (c.tipo === 'corpo') return [() => api.trocarCorpoDoDia(c.registro.dia, c.antes)]
     if (c.tipo === 'habito') {
       const agora = c.habito.registro[diaLocal(new Date())] ?? 0
       return [() => api.registrarHabito(c.habito.id, c.antes - agora)]

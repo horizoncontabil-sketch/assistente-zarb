@@ -18,7 +18,7 @@ import { lembretesDeHabito, registrar as registrarNoHabito, TODO_DIA, type Habit
 import { bordaMaisProxima, horizontal, posicaoValida, posicionarJanela } from '../shared/posicao'
 import { pastaAceitavel } from '../shared/claude'
 import { adiar, concluir, devidas } from '../shared/tarefas'
-import type { ComandoJanela, Configuracoes, Mensagem, Mudou, NovoHabito, PedidoPc, QualAtalho, RascunhoEvento, Repetir } from '../shared/tipos'
+import type { ComandoJanela, Configuracoes, Mensagem, Mudou, NovoHabito, PedidoPc, Plano, QualAtalho, RascunhoEvento, RegistroCorpo, Repetir, TipoRefeicao } from '../shared/tipos'
 
 const APP_ID = 'br.com.zarbmedia.assistente'
 // A janela é transparente e maior que o entalho: o espaço vazio deixa o clique passar.
@@ -187,7 +187,7 @@ function registrarTodos() {
   const c = config.ler()
   const falhas = (['atalhoAbrir', 'atalhoFalar', 'atalhoCopiados'] as QualAtalho[]).filter((q) => !registrar(q, c[q]))
   if (falhas.length) {
-    new Notification({ title: 'Assistente Zarb', body: 'Um atalho de teclado está em uso por outro programa. Troque em Configurações.' }).show()
+    new Notification({ title: 'Assistente pessoal', body: 'Um atalho de teclado está em uso por outro programa. Troque em Configurações.' }).show()
   }
 }
 
@@ -290,7 +290,7 @@ async function vigiarCopias() {
 
 function criarBandeja() {
   bandeja = new Tray(nativeImage.createFromPath(join(recursos(), 'tray.png')))
-  bandeja.setToolTip('Assistente Zarb')
+  bandeja.setToolTip('Assistente pessoal')
   bandeja.on('click', () => enviar({ tipo: 'expandir' }))
   bandeja.setContextMenu(
     Menu.buildFromTemplate([
@@ -372,6 +372,51 @@ function habitoValido(v: unknown): NovoHabito | null {
         ? { tipo: 'intervalo', aCadaMin: Math.round(Number(l.aCadaMin)), de: l.de, ate: l.ate }
         : null
   return { nome, dias, meta, lembrete }
+}
+
+const TIPOS_REF = new Set(['cafe', 'almoco', 'lanche', 'jantar', 'ceia', 'livre'])
+const DIA = /^\d{4}-\d{2}-\d{2}$/
+const numero = (v: unknown, min: number, max: number) => (typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max ? v : undefined)
+
+function planoValido(v: unknown): Plano | null {
+  const p = v as Record<string, unknown>
+  const campos = {
+    pesoInicial: numero(p?.pesoInicial, 30, 250),
+    gorduraInicial: numero(p?.gorduraInicial, 3, 60),
+    gorduraAlvo: numero(p?.gorduraAlvo, 3, 60),
+    alturaCm: numero(p?.alturaCm, 120, 230),
+    idade: numero(p?.idade, 12, 100),
+    kcal: numero(p?.kcal, 1200, 6000),
+    proteina: numero(p?.proteina, 30, 400),
+    carbo: numero(p?.carbo, 0, 800),
+    gordura: numero(p?.gordura, 10, 300),
+    treinosSemana: numero(p?.treinosSemana, 0, 14),
+    refeicaoLivreKcal: numero(p?.refeicaoLivreKcal, 0, 4000),
+  }
+  if (typeof p?.inicio !== 'string' || typeof p?.fim !== 'string' || !DIA.test(p.inicio) || !DIA.test(p.fim) || p.fim <= p.inicio) return null
+  if (Object.values(campos).some((x) => x === undefined) || campos.gorduraAlvo! >= campos.gorduraInicial!) return null
+  return { inicio: p.inicio, fim: p.fim, ...(campos as Omit<Plano, 'inicio' | 'fim'>) }
+}
+
+function registroValido(v: unknown): RegistroCorpo | null {
+  const r = v as Record<string, unknown>
+  if (typeof r?.dia !== 'string' || !DIA.test(r.dia)) return null
+  const reg: RegistroCorpo = { dia: r.dia }
+  const campos: [keyof RegistroCorpo, number, number][] = [['peso', 30, 250], ['abdomen', 40, 200], ['gordura', 3, 60], ['musculo', 5, 70], ['visceral', 1, 30], ['pressaoSis', 70, 250], ['pressaoDia', 40, 150]]
+  for (const [k, min, max] of campos) {
+    const n = numero(r[k], min, max)
+    if (n !== undefined) (reg as Record<string, unknown>)[k] = Math.round(n * 10) / 10
+  }
+  if (typeof r.treino === 'boolean') reg.treino = r.treino
+  return Object.keys(reg).length > 1 ? reg : null
+}
+
+function itemValido(v: unknown) {
+  const i = v as Record<string, unknown>
+  const g = numero(i?.gramas, 1, 5000)
+  if (typeof i?.alimentoId !== 'string' || typeof i?.nome !== 'string' || g === undefined) return null
+  const n = (k: string) => numero(i[k], 0, 20000) ?? 0
+  return { alimentoId: i.alimentoId.slice(0, 120), nome: i.nome.slice(0, 120), gramas: Math.round(g), kcal: n('kcal'), p: n('p'), c: n('c'), g: n('g'), fibra: n('fibra') }
 }
 
 function pedidoPcValido(v: unknown): PedidoPc | null {
@@ -611,6 +656,67 @@ function ligarIpc() {
     dados.mudarHabitos((l) => l.map((x) => (x.id === id ? registrarNoHabito(x, new Date(), delta) : x)))
     mudou('habitos')
   })
+  h('saude', () => ({ plano: dados.ler.plano(), corpo: dados.ler.corpo(), refeicoes: dados.ler.refeicoes(), receitas: dados.ler.receitas(), alimentosMeus: dados.ler.alimentosMeus() }))
+  h('salvarPlano', (_e, p: unknown) => {
+    const plano = planoValido(p)
+    if (!plano) return { ok: false, erro: 'Confira as datas e os números da meta.' }
+    dados.gravarPlano(plano)
+    mudou('saude')
+    return { ok: true }
+  })
+  h('registrarCorpo', (_e, r: unknown) => {
+    const reg = registroValido(r)
+    if (!reg) return { ok: false, erro: 'Medida inválida.' }
+    dados.registrarCorpo(reg)
+    mudou('saude')
+    return { ok: true }
+  })
+  h('trocarCorpoDoDia', (_e, dia: unknown, r: unknown) => {
+    if (typeof dia !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(dia)) return
+    dados.trocarCorpoDoDia(dia, r === null ? null : registroValido(r))
+    mudou('saude')
+  })
+  h('salvarRefeicao', (_e, r: unknown) => {
+    const x = r as { id?: unknown; dia?: unknown; tipo?: unknown; itens?: unknown }
+    const itens = Array.isArray(x?.itens) ? x.itens.map(itemValido).filter((i): i is NonNullable<ReturnType<typeof itemValido>> => !!i) : []
+    if (typeof x?.dia !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(x.dia) || !TIPOS_REF.has(x.tipo as string) || !itens.length) return { ok: false, erro: 'Refeição sem alimento ou com dia inválido.' }
+    const id = typeof x.id === 'string' ? x.id : randomUUID()
+    const nova = { id, dia: x.dia, tipo: x.tipo as TipoRefeicao, itens, em: new Date().toISOString() }
+    dados.mudarRefeicoes((l) => [...l.filter((y) => y.id !== id), nova])
+    mudou('saude')
+    return { ok: true }
+  })
+  h('apagarRefeicao', (_e, id: unknown) => {
+    dados.mudarRefeicoes((l) => l.filter((y) => y.id !== id))
+    mudou('saude')
+  })
+  h('salvarReceita', (_e, r: unknown) => {
+    const x = r as { id?: unknown; nome?: unknown; itens?: unknown }
+    const nome = typeof x?.nome === 'string' ? x.nome.trim().slice(0, 60) : ''
+    const itens = Array.isArray(x?.itens) ? x.itens.filter((i) => typeof i?.alimentoId === 'string' && typeof i?.gramas === 'number' && i.gramas > 0 && i.gramas < 5000).map((i) => ({ alimentoId: i.alimentoId as string, gramas: Math.round(i.gramas) })) : []
+    if (!nome || !itens.length) return { ok: false, erro: 'Dê um nome e pelo menos um alimento.' }
+    const id = typeof x.id === 'string' ? x.id : randomUUID()
+    dados.mudarReceitas((l) => [...l.filter((y) => y.id !== id), { id, nome, itens }])
+    mudou('saude')
+    return { ok: true }
+  })
+  h('apagarReceita', (_e, id: unknown) => {
+    dados.mudarReceitas((l) => l.filter((y) => y.id !== id))
+    mudou('saude')
+  })
+  h('salvarAlimento', (_e, a: unknown) => {
+    const x = a as Record<string, unknown>
+    const nome = typeof x?.nome === 'string' ? x.nome.trim().slice(0, 80) : ''
+    const n = (k: string) => (typeof x?.[k] === 'number' && (x[k] as number) >= 0 && (x[k] as number) < 1000 ? (x[k] as number) : null)
+    if (!nome || n('kcal') === null) return { ok: false, erro: 'Dê um nome e as calorias por 100 g.' }
+    const id = typeof x.id === 'string' && x.id.startsWith('meu:') ? x.id : `meu:${randomUUID()}`
+    dados.mudarAlimentosMeus((l) => [...l.filter((y) => y.id !== id), { id, nome, fonte: 'meu', kcal: n('kcal')!, p: n('p') ?? 0, c: n('c') ?? 0, g: n('g') ?? 0, fibra: n('fibra') ?? 0 }])
+    mudou('saude')
+    return { ok: true, id }
+  })
+  h('interpretarRefeicao', (_e, t: unknown, dia: unknown) =>
+    typeof t === 'string' && t.trim() && typeof dia === 'string' ? assistente.interpretarRefeicao(t, dia) : { ok: false, erro: 'Descreva a refeição.' },
+  )
   h('pcEstado', () => pc.estado())
   h('pc', (_e, pedido: unknown) => {
     const p = pedidoPcValido(pedido)

@@ -11,9 +11,14 @@ import { descreverQuando, descreverRepetir, diaLocal } from '../shared/datas'
 import { instrucao } from '../shared/groq'
 import { progresso, registrar } from '../shared/habitos'
 import { concluir } from '../shared/tarefas'
+import { ALIMENTOS_TACO, totaisDoDia } from '../shared/alimentacao'
+import { montarRascunho } from '../shared/refeicaoIa'
 import type { Aba, Cartao, Mensagem, Resposta } from '../shared/tipos'
 
 const NOME_ABA: Record<Exclude<Aba, 'hoje'>, string> = {
+  metas: 'Metas',
+  alimentacao: 'Alimentação',
+  corpo: 'Corpo',
   tarefas: 'Tarefas',
   habitos: 'Hábitos',
   agenda: 'Agenda',
@@ -24,7 +29,7 @@ const NOME_ABA: Record<Exclude<Aba, 'hoje'>, string> = {
 }
 
 // Cartões que não pedem nada ao Paulo: a resposta cabe no entalho, sem abrir o painel.
-const SO_AVISO = new Set<Cartao['tipo']>(['tarefa', 'concluida', 'aberto', 'habito', 'volume'])
+const SO_AVISO = new Set<Cartao['tipo']>(['tarefa', 'concluida', 'aberto', 'habito', 'volume', 'corpo'])
 
 function fechar(r: Resposta): Resposta {
   const rapida = !r.erro && !r.aba && r.texto.length <= 140 && r.cartoes.every((c) => SO_AVISO.has(c.tipo))
@@ -35,6 +40,36 @@ async function volume(m: { nivel?: number; mudar?: number; mudo?: boolean }): Pr
   const r = await pc.mudarVolume(m)
   if (!r) return { texto: process.platform === 'win32' ? 'Não consegui mudar o volume.' : 'Volume só funciona no Windows.', cartoes: [], erro: true }
   return { texto: r.mudo ? 'Som no mudo.' : `Volume em ${r.volume}%.`, cartoes: [{ tipo: 'volume', volume: r.volume, mudo: r.mudo }] }
+}
+
+// O que a IA recebe sobre a dieta de hoje (só números, para responder "quanto ainda cabe").
+function dietaDeHoje(agora: Date): string | null {
+  const p = dados.ler.plano()
+  if (!p) return null
+  const t = totaisDoDia(dados.ler.refeicoes(), diaLocal(agora))
+  return `comeu ${t.kcal} de ${p.kcal} kcal, ${t.p} de ${p.proteina} g de proteína, ${t.c} de ${p.carbo} g de carboidrato, ${t.g} de ${p.gordura} g de gordura`
+}
+
+const baseDeAlimentos = () => [...dados.ler.alimentosMeus(), ...ALIMENTOS_TACO]
+
+export async function interpretarRefeicao(texto: string, dia: string) {
+  const agora = new Date()
+  const r = await groq.perguntar(
+    instrucao(agora, [], [], []) + '\nAgora só registre a refeição descrita com registrar_refeicao.',
+    [],
+    texto.slice(0, 2000),
+  )
+  if (!r.ok) return r
+  const ch = r.chamadas.find((c) => c.nome === 'registrar_refeicao')
+  if (!ch) return { ok: false as const, erro: r.texto ?? 'Não entendi a refeição. Diga os alimentos e as quantidades.' }
+  let args: { tipo?: unknown; itens?: unknown }
+  try {
+    args = JSON.parse(ch.args)
+  } catch {
+    return { ok: false as const, erro: 'Não entendi a refeição.' }
+  }
+  const rascunho = montarRascunho(args, baseDeAlimentos(), dia, agora)
+  return rascunho ? { ok: true as const, rascunho } : { ok: false as const, erro: 'Não entendi a refeição.' }
 }
 
 export async function conversar(texto: string, historico: Mensagem[]): Promise<Resposta> {
@@ -62,6 +97,7 @@ export async function conversar(texto: string, historico: Mensagem[]): Promise<R
       dados.ler.atalhos().map((a) => a.nome),
       c.pastasClaude.map((p) => p.nome),
       dados.ler.habitos().map((h) => (h.meta ? `${h.nome} (meta ${h.meta.total} ${h.meta.unidade})` : h.nome)),
+      dietaDeHoje(agora),
     ),
     historico,
     pedido,
@@ -129,6 +165,29 @@ export async function conversar(texto: string, historico: Mensagem[]): Promise<R
         const res = await volume(a.mudanca)
         cartoes.push(...res.cartoes)
         falas.push(res.texto)
+        break
+      }
+      case 'refeicao': {
+        const rascunho = montarRascunho(a.args, baseDeAlimentos(), diaLocal(agora), agora)
+        if (rascunho) {
+          cartoes.push({ tipo: 'refeicao', rascunho })
+          falas.push('Confira a refeição e salve.')
+        } else falas.push('Não entendi a refeição.')
+        break
+      }
+      case 'corpo': {
+        const registro = { dia: diaLocal(agora), ...a.medidas }
+        const antes = dados.registrarCorpo(registro)
+        cartoes.push({ tipo: 'corpo', registro, antes })
+        const partes = [
+          a.medidas.peso && `peso ${String(a.medidas.peso).replace('.', ',')} kg`,
+          a.medidas.abdomen && `abdômen ${a.medidas.abdomen} cm`,
+          a.medidas.gordura && `gordura ${String(a.medidas.gordura).replace('.', ',')}%`,
+          a.medidas.pressaoSis && `pressão ${a.medidas.pressaoSis} por ${a.medidas.pressaoDia ?? '?'}`,
+          a.medidas.treino && 'treino do dia',
+        ].filter(Boolean)
+        falas.push(`Anotado: ${partes.join(', ')}.`)
+        acoes.avisarSaude()
         break
       }
       case 'pc':

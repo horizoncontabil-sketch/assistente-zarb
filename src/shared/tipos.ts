@@ -2,8 +2,11 @@
 import type { AcaoPc, MudancaVolume } from './acoes'
 import type { Habito } from './habitos'
 import type { Posicao } from './posicao'
+import type { Alimento, Receita, Refeicao, TipoRefeicao, ItemRefeicao } from './alimentacao'
+import type { Plano, RegistroCorpo } from './plano'
+import type { RascunhoRefeicao } from './refeicaoIa'
 
-export type { Habito, Posicao, AcaoPc, MudancaVolume }
+export type { Habito, Posicao, AcaoPc, MudancaVolume, Alimento, Receita, Refeicao, TipoRefeicao, ItemRefeicao, Plano, RegistroCorpo, RascunhoRefeicao }
 
 export type Repetir = 'diario' | 'dias_uteis' | 'semanal' | 'mensal' | null
 
@@ -85,6 +88,8 @@ export type Cartao =
   | { tipo: 'habito'; habito: Habito; antes: number }
   | { tipo: 'volume'; volume: number | null; mudo: boolean | null }
   | { tipo: 'pc'; acao: AcaoPc } // suspender, reiniciar, desligar: só com o clique
+  | { tipo: 'refeicao'; rascunho: RascunhoRefeicao } // só salva no clique, depois de conferir
+  | { tipo: 'corpo'; registro: RegistroCorpo; antes: RegistroCorpo | null }
 
 export type RascunhoEvento = {
   titulo: string
@@ -102,7 +107,7 @@ export type Ok = { ok: true } | { ok: false; erro: string }
 
 export type Mensagem = { papel: 'eu' | 'assistente'; texto: string }
 
-export type Mudou = 'tarefas' | 'eventos' | 'copias' | 'atalhos' | 'config' | 'habitos'
+export type Mudou = 'tarefas' | 'eventos' | 'copias' | 'atalhos' | 'config' | 'habitos' | 'saude'
 
 export type ApiAssistente = {
   // estado
@@ -156,6 +161,17 @@ export type ApiAssistente = {
   salvarHabito(h: NovoHabito, id?: string): Promise<Ok>
   apagarHabito(id: string): Promise<void>
   registrarHabito(id: string, delta: number): Promise<void>
+  // saúde
+  saude(): Promise<Saude>
+  salvarPlano(p: Plano): Promise<Ok>
+  registrarCorpo(r: RegistroCorpo): Promise<Ok>
+  trocarCorpoDoDia(dia: string, r: RegistroCorpo | null): Promise<void>
+  salvarRefeicao(r: { id?: string; dia: string; tipo: TipoRefeicao; itens: ItemRefeicao[] }): Promise<Ok>
+  apagarRefeicao(id: string): Promise<void>
+  salvarReceita(r: { id?: string; nome: string; itens: { alimentoId: string; gramas: number }[] }): Promise<Ok>
+  apagarReceita(id: string): Promise<void>
+  salvarAlimento(a: Omit<Alimento, 'id' | 'fonte'> & { id?: string }): Promise<Ok & { id?: string }>
+  interpretarRefeicao(texto: string, dia: string): Promise<{ ok: true; rascunho: RascunhoRefeicao } | { ok: false; erro: string }>
   // PC
   pcEstado(): Promise<EstadoPc>
   pc(acao: PedidoPc): Promise<Ok & { texto?: string }>
@@ -179,7 +195,7 @@ export type ComandoJanela =
   | { tipo: 'falar' }
   | { tipo: 'aviso'; aviso: Aviso }
 
-export type Aba = 'hoje' | 'tarefas' | 'habitos' | 'agenda' | 'copiados' | 'atalhos' | 'pc' | 'config'
+export type Aba = 'hoje' | 'metas' | 'alimentacao' | 'corpo' | 'tarefas' | 'habitos' | 'agenda' | 'copiados' | 'atalhos' | 'pc' | 'config'
 
 export type Aviso =
   | { tipo: 'lembrete'; tarefa: Tarefa; atrasado: boolean }
@@ -221,3 +237,5 @@ export type PedidoPc =
   | { tipo: 'organizarAreaDeTrabalho'; confirmado: boolean }
   | { tipo: 'mostrarDownload'; nome: string }
   | { tipo: 'abrirDownloads' }
+
+export type Saude = { plano: Plano | null; corpo: RegistroCorpo[]; refeicoes: Refeicao[]; receitas: Receita[]; alimentosMeus: Alimento[] }

@@ -6,10 +6,12 @@ import { Icone } from '../icones'
 import type { Dados } from '../usarDados'
 import { api, doCampo, paraCampo } from '../util'
 import { FormAtalho } from './Atalhos'
+import { EditorRefeicao, usarBase } from './Alimentacao'
 import { Mensagem } from './comum'
 
 export function CartaoDaResposta({ c, dados, agora }: { c: Cartao; dados: Dados; agora: Date }) {
   const [feito, setFeito] = useState<string | null>(null)
+  const base = usarBase(dados.saude.alimentosMeus)
   if (feito) return <p className="meta" style={{ paddingLeft: 4 }}>{feito}</p>
 
   const linhaUnica = (cor: string, icone: Parameters<typeof Icone>[0]['nome'], titulo: string, sub: string, desfazer?: () => Promise<unknown>) => (
@@ -48,6 +50,18 @@ export function CartaoDaResposta({ c, dados, agora }: { c: Cartao; dados: Dados;
       const atual = c.habito.registro[diaLocal(agora)] ?? 0
       return linhaUnica('var(--azul)', 'habito', c.habito.nome, c.habito.meta ? progresso(c.habito, agora).texto : 'Feito hoje', () => api.registrarHabito(c.habito.id, c.antes - atual))
     }
+    case 'refeicao':
+      return <EditorRefeicao inicial={c.rascunho} base={base} compacto aoTerminar={(msg) => setFeito(msg ?? 'Descartado.')} />
+    case 'corpo':
+      return linhaUnica(
+        'var(--azul)',
+        'corpo',
+        [c.registro.peso && `Peso ${String(c.registro.peso).replace('.', ',')} kg`, c.registro.abdomen && `abdômen ${c.registro.abdomen} cm`, c.registro.gordura && `gordura ${String(c.registro.gordura).replace('.', ',')}%`, c.registro.pressaoSis && `pressão ${c.registro.pressaoSis} x ${c.registro.pressaoDia ?? '?'}`, c.registro.treino && 'treino']
+          .filter(Boolean)
+          .join(' · '),
+        'Anotado em Corpo',
+        () => api.trocarCorpoDoDia(c.registro.dia, c.antes),
+      )
     case 'volume':
       return linhaUnica('var(--suave)', 'mic', c.mudo ? 'Som no mudo' : `Volume em ${c.volume}%`, 'PC')
     case 'aberto':

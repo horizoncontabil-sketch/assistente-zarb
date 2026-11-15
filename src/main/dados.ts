@@ -4,6 +4,8 @@ import { gravarJson, lerJson } from './armazem'
 import { adicionarCopia, podar } from '../shared/copias'
 import { limparAntigas, ordenar } from '../shared/tarefas'
 import type { Habito } from '../shared/habitos'
+import type { Alimento, Receita, Refeicao } from '../shared/alimentacao'
+import type { Plano, RegistroCorpo } from '../shared/plano'
 import type { Atalho, Copia, Evento, Tarefa } from '../shared/tipos'
 
 const OS = 'https://os.zarbmedia.com.br'
@@ -36,6 +38,12 @@ let atalhos: Atalho[] = lerJson<Atalho[] | null>('atalhos', null) ?? ATALHOS_INI
 let copias: Copia[] = podar(lerJson<Copia[]>('copias', []), new Date())
 let habitos: Habito[] = lerJson<Habito[]>('habitos', [])
 let avisosHabitos: Record<string, string> = lerJson<Record<string, string>>('avisos-habitos', {})
+// Saúde: só no PC. Nada disso vai para o código nem para fora, a não ser o que o Paulo fala com a IA.
+let plano: Plano | null = lerJson<Plano | null>('plano', null)
+let corpo: RegistroCorpo[] = lerJson<RegistroCorpo[]>('corpo', [])
+let refeicoes: Refeicao[] = lerJson<Refeicao[]>('refeicoes', [])
+let receitas: Receita[] = lerJson<Receita[]>('receitas', [])
+let alimentosMeus: Alimento[] = lerJson<Alimento[]>('alimentos-meus', [])
 let agenda = lerJson<{ eventos: Evento[]; lidoEm: string | null }>('agenda', { eventos: [], lidoEm: null })
 
 export const ler = {
@@ -44,6 +52,11 @@ export const ler = {
   copias: () => copias,
   agenda: () => agenda,
   habitos: () => habitos,
+  plano: () => plano,
+  corpo: () => corpo,
+  refeicoes: () => refeicoes,
+  receitas: () => receitas,
+  alimentosMeus: () => alimentosMeus,
   avisosHabitos: () => avisosHabitos,
 }
 
@@ -87,4 +100,37 @@ export function gravarAgenda(eventos: Evento[]) {
 export function limparAgenda() {
   agenda = { eventos: [], lidoEm: null }
   gravarJson('agenda', agenda)
+}
+
+export function gravarPlano(p: Plano | null) {
+  plano = p
+  gravarJson('plano', p)
+}
+
+// Um registro por dia: o novo junta com o que já havia no dia.
+export function registrarCorpo(r: RegistroCorpo) {
+  const antes = corpo.find((x) => x.dia === r.dia)
+  corpo = [...corpo.filter((x) => x.dia !== r.dia), { ...antes, ...r }].sort((a, b) => a.dia.localeCompare(b.dia))
+  gravarJson('corpo', corpo)
+  return antes ?? null
+}
+
+export function trocarCorpoDoDia(dia: string, r: RegistroCorpo | null) {
+  corpo = [...corpo.filter((x) => x.dia !== dia), ...(r ? [r] : [])].sort((a, b) => a.dia.localeCompare(b.dia))
+  gravarJson('corpo', corpo)
+}
+
+export function mudarRefeicoes(f: (r: Refeicao[]) => Refeicao[]) {
+  refeicoes = f(refeicoes)
+  gravarJson('refeicoes', refeicoes)
+}
+
+export function mudarReceitas(f: (r: Receita[]) => Receita[]) {
+  receitas = f(receitas)
+  gravarJson('receitas', receitas)
+}
+
+export function mudarAlimentosMeus(f: (a: Alimento[]) => Alimento[]) {
+  alimentosMeus = f(alimentosMeus)
+  gravarJson('alimentos-meus', alimentosMeus)
 }

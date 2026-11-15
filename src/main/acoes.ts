@@ -12,10 +12,14 @@ import { tipoDoDestino } from '../shared/destino'
 import { novaTarefa } from '../shared/tarefas'
 import type { Atalho, Ok, Repetir, Tarefa } from '../shared/tipos'
 
-export type Aviso = (o: 'tarefas' | 'eventos' | 'atalhos' | 'config' | 'habitos') => void
+export type Aviso = (o: 'tarefas' | 'eventos' | 'atalhos' | 'config' | 'habitos' | 'saude') => void
 let avisar: Aviso = () => {}
 export function aoMudar(f: Aviso) {
   avisar = f
+}
+
+export function avisarSaude() {
+  avisar('saude')
 }
 
 export function avisarMudanca() {

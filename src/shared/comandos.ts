@@ -16,16 +16,19 @@ export type ComandoDireto =
   | { tipo: 'volume'; mudanca: { nivel?: number; mudar?: number; mudo?: boolean } }
   | { tipo: 'bloquear' }
   | { tipo: 'hoje' }
-  | { tipo: 'aba'; aba: 'tarefas' | 'agenda' | 'copiados' | 'atalhos' | 'config' | 'habitos' | 'pc' }
+  | { tipo: 'aba'; aba: 'tarefas' | 'agenda' | 'copiados' | 'atalhos' | 'config' | 'habitos' | 'pc' | 'metas' | 'alimentacao' | 'corpo' }
 
 const HOJE = /^(o que (eu )?tenho( pra| para)? hoje|minha agenda( de hoje)?|agenda( de)? hoje|meu dia|resumo do dia|hoje)$/
-const ABAS: [RegExp, 'tarefas' | 'agenda' | 'copiados' | 'atalhos' | 'config' | 'habitos' | 'pc'][] = [
+const ABAS: [RegExp, 'tarefas' | 'agenda' | 'copiados' | 'atalhos' | 'config' | 'habitos' | 'pc' | 'metas' | 'alimentacao' | 'corpo'][] = [
   [/^((minhas |ver )?tarefas( pendentes)?|tenho tarefas?( pendentes?)?|lista de tarefas)$/, 'tarefas'],
   [/^((minha |ver )?agenda( da semana)?|compromissos)$/, 'agenda'],
   [/^((ver )?copiados|historico( do que copiei)?|o que (eu )?copiei)$/, 'copiados'],
   [/^((meus |ver )?atalhos)$/, 'atalhos'],
   [/^(configuracoes|config|ajustes)$/, 'config'],
   [/^((meus )?habitos)$/, 'habitos'],
+  [/^((minhas )?metas|minha meta)$/, 'metas'],
+  [/^(alimentacao|dieta|refeicoes|o que (eu )?comi( hoje)?)$/, 'alimentacao'],
+  [/^(corpo|peso|medidas|bioimpedancia)$/, 'corpo'],
   [/^(pc|computador)$/, 'pc'],
 ]
 

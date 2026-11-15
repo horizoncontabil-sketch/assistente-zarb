@@ -87,7 +87,7 @@ export function conectar(): Promise<Ok> {
       const valido = code && url.searchParams.get('state') === estadoEsperado
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
       res.end(
-        `<!doctype html><meta charset="utf-8"><title>Assistente Zarb</title><body style="font:16px system-ui;padding:40px">` +
+        `<!doctype html><meta charset="utf-8"><title>Assistente pessoal</title><body style="font:16px system-ui;padding:40px">` +
           (valido ? 'Agenda conectada. Pode fechar esta aba.' : 'Login cancelado ou inválido. Pode fechar esta aba.') +
           '</body>',
       )

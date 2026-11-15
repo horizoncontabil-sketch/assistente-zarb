@@ -7,10 +7,12 @@ import { Configuracoes } from './abas/Configuracoes'
 import { Conversa } from './abas/Conversa'
 import { Copiados } from './abas/Copiados'
 import { Habitos } from './abas/Habitos'
+import { Metas } from './abas/Metas'
+import { Alimentacao } from './abas/Alimentacao'
+import { Corpo } from './abas/Corpo'
 import { Hoje } from './abas/Hoje'
 import { Pc } from './abas/Pc'
 import { Tarefas } from './abas/Tarefas'
-import logo from './assets/zarb-logo.png'
 import { Icone, type NomeIcone } from './icones'
 import type { Dados } from './usarDados'
 import type { usarGravacao } from './usarVoz'
@@ -32,6 +34,9 @@ export type PropsPainel = {
 
 const ITENS: { id: Aba; nome: string; icone: NomeIcone }[] = [
   { id: 'hoje', nome: 'Hoje', icone: 'sol' },
+  { id: 'metas', nome: 'Metas', icone: 'alvo' },
+  { id: 'alimentacao', nome: 'Alimentação', icone: 'prato' },
+  { id: 'corpo', nome: 'Corpo', icone: 'corpo' },
   { id: 'tarefas', nome: 'Tarefas', icone: 'check' },
   { id: 'habitos', nome: 'Hábitos', icone: 'habito' },
   { id: 'agenda', nome: 'Agenda', icone: 'agenda' },
@@ -57,8 +62,8 @@ export function Painel(p: PropsPainel) {
     <div className="painel">
       <nav className="menu" aria-label="Menu">
         <div className="menu-marca">
-          <img src={logo} alt="z.arb" />
-          <span>assistente</span>
+          <span className="marca-anel" aria-hidden="true" />
+          <strong>assistente pessoal</strong>
         </div>
         {ITENS.map(item)}
         <div className="vao" />
@@ -75,6 +80,9 @@ export function Painel(p: PropsPainel) {
       <main className="conteudo">
         {aba === 'conversa' && <Conversa {...p} />}
         {aba === 'hoje' && <Hoje {...p} />}
+        {aba === 'metas' && <Metas dados={dados} agora={agora} />}
+        {aba === 'alimentacao' && <Alimentacao dados={dados} agora={agora} irPara={setAba} />}
+        {aba === 'corpo' && <Corpo dados={dados} agora={agora} />}
         {aba === 'tarefas' && <Tarefas tarefas={dados.tarefas} agora={agora} />}
         {aba === 'habitos' && <Habitos habitos={dados.habitos} agora={agora} />}
         {aba === 'agenda' && <Agenda dados={dados} agora={agora} irPara={setAba} />}

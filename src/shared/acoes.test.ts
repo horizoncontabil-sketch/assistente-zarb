@@ -76,3 +76,9 @@ describe('ferramentas novas', () => {
     expect(validarAcao('acao_pc', '{"acao":"formatar"}', c2).ok).toBe(false)
   })
 })
+
+it('corpo: só números plausíveis', () => {
+  expect(validarAcao('registrar_corpo', '{"peso":73.24,"treino":true}', ctx)).toEqual({ ok: true, acao: { tipo: 'corpo', medidas: { peso: 73.2, treino: true } } })
+  expect(validarAcao('registrar_corpo', '{"peso":7}', ctx).ok).toBe(false)
+  expect(validarAcao('registrar_refeicao', '{"itens":[]}', ctx).ok).toBe(false)
+})
