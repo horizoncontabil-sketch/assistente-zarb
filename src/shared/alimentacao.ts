@@ -24,7 +24,16 @@ export const FONTE_TACO = (taco as { fonte: string }).fonte
 
 export const ALIMENTOS_TACO: Alimento[] = (taco as { alimentos: LinhaTaco[] }).alimentos
   .filter((a) => a.kcal != null)
-  .map((a) => ({ id: `taco:${a.id}`, nome: a.nome, categoria: a.categoria, fonte: 'taco', kcal: a.kcal ?? 0, p: a.p ?? 0, c: a.c ?? 0, g: a.g ?? 0, fibra: a.fibra ?? 0, medidas: a.medidas }))
+  .map((a): Alimento => ({ id: `taco:${a.id}`, nome: a.nome, categoria: a.categoria, fonte: 'taco', kcal: a.kcal ?? 0, p: a.p ?? 0, c: a.c ?? 0, g: a.g ?? 0, fibra: a.fibra ?? 0, medidas: a.medidas }))
+  .concat(derivados())
+
+// A TACO só tem macarrão cru; cozido rende ~2,5x o peso, então divide os valores do cru por 2,5.
+function derivados(): Alimento[] {
+  const cru = (taco as { alimentos: LinhaTaco[] }).alimentos.find((a) => a.nome === 'Macarrão, trigo, cru')
+  if (!cru || cru.kcal == null) return []
+  const d = (n: number | null) => Math.round(((n ?? 0) / 2.5) * 10) / 10
+  return [{ id: 'calc:macarrao-cozido', nome: 'Macarrão, trigo, cozido (calculado do cru)', categoria: cru.categoria, fonte: 'taco', kcal: Math.round(cru.kcal / 2.5), p: d(cru.p), c: d(cru.c), g: d(cru.g), fibra: d(cru.fibra) }]
+}
 
 const PREPARADO = /\b(cozid[oa]|grelhad[oa]|assad[oa]|refogad[oa]|frit[oa])\b/
 
