@@ -5,7 +5,7 @@ import { autoUpdater } from 'electron-updater'
 import { readFileSync } from 'node:fs'
 import { assinaturaConfere, CHAVE_PUBLICA } from '../shared/assinatura'
 
-const REPO = 'https://github.com/ZarbMedia9/assistente-zarb/releases/download'
+const REPO = 'https://github.com/horizoncontabil-sketch/assistente-zarb/releases/download'
 
 import type { EstadoAtualizacao } from '../shared/tipos'
 export type { EstadoAtualizacao }

@@ -23,6 +23,6 @@ nsis:
 # Atualização automática: versões nas Releases do próprio repositório (público).
 publish:
   provider: github
-  owner: ZarbMedia9
+  owner: horizoncontabil-sketch
   repo: assistente-zarb
   releaseType: release
