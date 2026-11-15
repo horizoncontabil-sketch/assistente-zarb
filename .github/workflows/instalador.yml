@@ -51,4 +51,5 @@ jobs:
           $v = (Get-Content package.json | ConvertFrom-Json).version
           $exe = "dist/Assistente-Zarb-$v.exe"
           node scripts/assinar.mjs $exe
+          if ($LASTEXITCODE -ne 0) { exit 1 }
           gh release create "v$v" $exe "$exe.sig" "$exe.blockmap" dist/latest.yml --title "Versão $v" --notes "$env:NOTAS" --latest
