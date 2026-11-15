@@ -14,8 +14,15 @@ extraResources:
 win:
   target: nsis
   icon: build/icon.png
+  artifactName: Assistente-Zarb-${version}.${ext}
 nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
   shortcutName: Assistente Zarb
+# Atualização automática: versões nas Releases do próprio repositório (público).
+publish:
+  provider: github
+  owner: ZarbMedia9
+  repo: assistente-zarb
+  releaseType: release

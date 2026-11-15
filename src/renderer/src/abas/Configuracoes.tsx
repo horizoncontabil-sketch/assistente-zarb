@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { aceleradorDaTecla, aceleradorLegivel } from '../../../shared/atalho'
-import type { Configuracoes as Config, QualAtalho } from '../../../shared/tipos'
+import type { Atualizacao, Configuracoes as Config, QualAtalho } from '../../../shared/tipos'
 import { Icone } from '../icones'
 import { api } from '../util'
 import { BotaoApagar, Mensagem, Secao } from './comum'
@@ -55,6 +55,10 @@ export function Configuracoes({ config: c, chamado }: { config: Config; chamado:
 
       <Secao titulo="Claude Code">
         <PastasClaude c={c} mostrar={mostrar} />
+      </Secao>
+
+      <Secao titulo="Versão">
+        <Versao config={c} />
       </Secao>
 
       <Secao titulo="Geral">
@@ -320,5 +324,32 @@ function PastasClaude({ c, mostrar }: { c: Config; mostrar: (r: { ok: true } | {
         </button>
       </form>
     </>
+  )
+}
+
+function Versao({ config }: { config: Config }) {
+  const [a, setA] = useState<Atualizacao | null>(null)
+  useEffect(() => {
+    api.atualizacao().then(setA)
+  }, [config])
+  if (!a) return null
+  const hora = (iso: string) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  const texto =
+    a.tipo === 'em-dia'
+      ? `Em dia${a.conferidoEm ? ` (conferido às ${hora(a.conferidoEm)})` : ''}. As versões novas chegam sozinhas.`
+      : a.tipo === 'baixando'
+        ? `Baixando a versão ${a.versao} (${a.porcento}%).`
+        : a.tipo === 'pronta'
+          ? `Versão ${a.versao} pronta. Instala sozinha quando o painel fechar.`
+          : a.tipo === 'recusada'
+            ? `Versão ${a.versao} recusada: ${a.motivo}`
+            : a.tipo === 'erro'
+              ? a.motivo
+              : `Atualização automática desligada: ${a.motivo}`
+  return (
+    <div className="campo">
+      <span>Versão {a.versao_atual}</span>
+      <span className={a.tipo === 'recusada' || a.tipo === 'erro' ? 'texto-erro' : 'discreto-texto'}>{texto}</span>
+    </div>
   )
 }

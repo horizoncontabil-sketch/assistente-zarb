@@ -137,6 +137,7 @@ export type ApiAssistente = {
   mudarConfig(m: MudancaConfig): Promise<void>
   definirIniciarComWindows(ligar: boolean): Promise<void>
   modeloVoz(): Promise<Uint8Array | null>
+  atualizacao(): Promise<Atualizacao>
   // janela
   expandido(sim: boolean): Promise<void>
   mouseSobre(sim: boolean): Promise<void>
@@ -158,3 +159,13 @@ export type Aba = 'hoje' | 'tarefas' | 'agenda' | 'copiados' | 'atalhos' | 'conf
 export type Aviso =
   | { tipo: 'lembrete'; tarefa: Tarefa; atrasado: boolean }
   | { tipo: 'evento'; evento: Evento; minutos: number }
+
+export type EstadoAtualizacao =
+  | { tipo: 'desligada'; motivo: string }
+  | { tipo: 'em-dia'; conferidoEm: string | null }
+  | { tipo: 'baixando'; versao: string; porcento: number }
+  | { tipo: 'pronta'; versao: string }
+  | { tipo: 'recusada'; versao: string; motivo: string }
+  | { tipo: 'erro'; motivo: string }
+
+export type Atualizacao = EstadoAtualizacao & { versao_atual: string }

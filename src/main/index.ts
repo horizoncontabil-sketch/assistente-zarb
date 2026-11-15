@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import * as acoes from './acoes'
 import * as assistente from './assistente'
+import * as atualizacao from './atualizacao'
 import * as config from './config'
 import * as dados from './dados'
 import * as google from './google'
@@ -89,7 +90,6 @@ function criarJanela() {
   else janela.loadFile(join(__dirname, '../renderer/index.html'))
   wc.once('did-finish-load', () => {
     if (config.ler().entalhoSempreVisivel) janela?.showInactive()
-    if (!config.ler().groqCifrada) enviar({ tipo: 'expandir', aba: 'config' })
   })
 }
 
@@ -117,6 +117,7 @@ function definirExpandido(sim: boolean) {
     // Devolve o foco ao programa de antes.
     janela.blur()
     if (!config.ler().entalhoSempreVisivel) janela.hide()
+    atualizacao.talvezInstalar()
   }
 }
 
@@ -486,6 +487,7 @@ function ligarIpc() {
     return existsSync(p) ? new Uint8Array(readFileSync(p)) : null
   })
 
+  h('atualizacao', () => atualizacao.estadoAtualizacao())
   h('expandido', (_e, sim: unknown) => definirExpandido(sim === true))
   h('mouseSobre', (_e, sim: unknown) => {
     if (!expandido) janela?.setIgnoreMouseEvents(sim !== true, { forward: true })
@@ -518,6 +520,7 @@ app.whenReady().then(() => {
   setInterval(lerAgenda, 5 * 60_000)
   setTimeout(verificarLembretes, 3000)
   lerAgenda()
+  atualizacao.iniciar(() => mudou('config'), () => !expandido)
 })
 
 app.on('window-all-closed', () => {})

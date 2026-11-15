@@ -41,6 +41,7 @@ const api: ApiAssistente = {
   mudarConfig: i('mudarConfig'),
   definirIniciarComWindows: i('definirIniciarComWindows'),
   modeloVoz: i('modeloVoz'),
+  atualizacao: i('atualizacao'),
   expandido: i('expandido'),
   mouseSobre: i('mouseSobre'),
   sair: i('sair'),

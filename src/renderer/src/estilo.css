@@ -1135,3 +1135,7 @@ kbd.gravando {
     transition-duration: 0.01ms !important;
   }
 }
+
+.texto-erro {
+  color: var(--vermelho);
+}

@@ -28,6 +28,13 @@ export function App() {
     setExpandido(true)
   }, [])
 
+  // Primeira vez (sem a chave da Groq): abre direto nas configurações.
+  useEffect(() => {
+    api.configuracoes().then((c) => {
+      if (!c.temChaveGroq) abrirPainel('config')
+    })
+  }, [abrirPainel])
+
   useEffect(() => {
     api.expandido(expandido)
     if (expandido) setTimeout(() => entrada.current?.focus(), 180)
