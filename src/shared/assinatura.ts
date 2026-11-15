@@ -3,7 +3,10 @@
 import { createPublicKey, verify } from 'node:crypto'
 
 // Chave pública das versões (não é segredo). Vazia = atualização automática desligada.
-export const CHAVE_PUBLICA = ''
+export const CHAVE_PUBLICA = `-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAJ2quzOJtsAwJC0OMslXoqwCSr1H6nC20pfu3gp3+irU=
+-----END PUBLIC KEY-----
+`
 
 export function assinaturaConfere(arquivo: Uint8Array, assinaturaBase64: string, chavePem = CHAVE_PUBLICA): boolean {
   if (!chavePem.trim() || !assinaturaBase64.trim()) return false
