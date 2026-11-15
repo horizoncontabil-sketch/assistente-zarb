@@ -8,17 +8,25 @@ export type EstadoVoz = 'parado' | 'ouvindo' | 'transcrevendo'
 // Gravação da fala: começa no atalho (ou no "Ei, Zarb") e para sozinha quando a pessoa
 // fica em silêncio, ou no atalho de novo. O áudio vai para a transcrição e é descartado.
 export function usarGravacao(aoTranscrever: (texto: string) => void, aoErro: (erro: string) => void) {
-  const [estado, setEstado] = useState<EstadoVoz>('parado')
+  const [estado, setEstadoBruto] = useState<EstadoVoz>('parado')
+  // O estado também num ref: "iniciar" pode ser chamado de uma função antiga (ao fim da fala).
+  const estadoRef = useRef<EstadoVoz>('parado')
+  const setEstado = (e: EstadoVoz) => {
+    estadoRef.current = e
+    setEstadoBruto(e)
+  }
   const [nivel, setNivel] = useState(0)
   const parar = useRef<() => void>(() => {})
   const cancelado = useRef(false)
 
   const iniciar = useCallback(async () => {
-    if (estado !== 'parado') return
+    if (estadoRef.current !== 'parado') return
+    setEstado('ouvindo') // reserva já, para dois chamados seguidos não abrirem dois microfones
     let stream: MediaStream
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
     } catch {
+      setEstado('parado')
       aoErro('Não consegui usar o microfone. Confira se ele está ligado e liberado no Windows.')
       return
     }
@@ -78,12 +86,12 @@ export function usarGravacao(aoTranscrever: (texto: string) => void, aoErro: (er
     gravador.start(250)
     setEstado('ouvindo')
     quadro = requestAnimationFrame(medir)
-  }, [estado, aoTranscrever, aoErro])
+  }, [aoTranscrever, aoErro])
 
   const alternar = useCallback(() => {
-    if (estado === 'ouvindo') parar.current()
-    else if (estado === 'parado') iniciar()
-  }, [estado, iniciar])
+    if (estadoRef.current === 'ouvindo') parar.current()
+    else if (estadoRef.current === 'parado') iniciar()
+  }, [iniciar])
 
   const cancelar = useCallback(() => {
     cancelado.current = true

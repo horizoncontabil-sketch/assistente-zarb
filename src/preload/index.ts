@@ -42,6 +42,19 @@ const api: ApiAssistente = {
   definirIniciarComWindows: i('definirIniciarComWindows'),
   modeloVoz: i('modeloVoz'),
   atualizacao: i('atualizacao'),
+  habitos: i('habitos'),
+  salvarHabito: i('salvarHabito'),
+  apagarHabito: i('apagarHabito'),
+  registrarHabito: i('registrarHabito'),
+  pcEstado: i('pcEstado'),
+  pc: i('pc'),
+  arrastar: i('arrastar'),
+  definirPosicao: i('definirPosicao'),
+  aoPosicao: (cb) => {
+    const f = (_e: unknown, p: Parameters<typeof cb>[0]) => cb(p)
+    ipcRenderer.on('posicao', f)
+    return () => ipcRenderer.removeListener('posicao', f)
+  },
   expandido: i('expandido'),
   mouseSobre: i('mouseSobre'),
   sair: i('sair'),

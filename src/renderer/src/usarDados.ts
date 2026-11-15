@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { Atalho, Configuracoes, Copia, Evento, Mudou, Tarefa } from '../../shared/tipos'
+import type { Atalho, Configuracoes, Copia, Evento, Habito, Mudou, Tarefa } from '../../shared/tipos'
 import { api } from './util'
 
 type Agenda = { eventos: Evento[]; lidoEm: string | null; erro: string | null }
@@ -10,6 +10,7 @@ export function usarDados() {
   const [agenda, setAgenda] = useState<Agenda>({ eventos: [], lidoEm: null, erro: null })
   const [copias, setCopias] = useState<Copia[]>([])
   const [atalhos, setAtalhos] = useState<Atalho[]>([])
+  const [habitos, setHabitos] = useState<Habito[]>([])
 
   useEffect(() => {
     const carregar: Record<Mudou, () => void> = {
@@ -18,12 +19,13 @@ export function usarDados() {
       eventos: () => api.eventos().then(setAgenda),
       copias: () => api.copias().then(setCopias),
       atalhos: () => api.atalhos().then(setAtalhos),
+      habitos: () => api.habitos().then(setHabitos),
     }
     Object.values(carregar).forEach((f) => f())
     return api.aoMudar((o) => carregar[o]())
   }, [])
 
-  return { config, tarefas, agenda, copias, atalhos }
+  return { config, tarefas, agenda, copias, atalhos, habitos }
 }
 
 export type Dados = ReturnType<typeof usarDados>

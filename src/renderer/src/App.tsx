@@ -1,15 +1,22 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { hora, mesmoDia } from '../../shared/datas'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as PE } from 'react'
+import { diaLocal, hora, mesmoDia } from '../../shared/datas'
 import { eventosDoDia } from '../../shared/google'
-import type { Aba, Aviso, Mensagem, Resposta } from '../../shared/tipos'
-import { Alerta } from './Alerta'
+import { ehDiaDele, feitoNoDia } from '../../shared/habitos'
+import { horizontal, type Borda } from '../../shared/posicao'
+import type { Aba, Aviso, Cartao, Mensagem, Resposta } from '../../shared/tipos'
+import { Avisos } from './Alerta'
+import marcaZ from './assets/z-marca.png'
 import { Painel } from './Painel'
-import { usarAgora, usarDados } from './usarDados'
+import { usarAgora, usarDados, type Dados } from './usarDados'
 import { usarChamado, usarGravacao } from './usarVoz'
-import { api, emQuanto, falar, minutosAte } from './util'
+import { api, calar, emQuanto, falando, falar, minutosAte } from './util'
 
 export type Troca = { id: number; pergunta: string; resposta: Resposta | null; falado: boolean }
+type Pos = { borda: Borda; deslocamento: number; arrastando: boolean }
+type Toast = { texto: string; desfazer?: () => void; erro?: boolean }
 
+const JANELA = { w: 960, h: 660 }
+const COMPRIMENTO = { deitado: 340, emPe: 210 }
 let proximoId = 1
 
 export function App() {
@@ -19,16 +26,22 @@ export function App() {
   const [aba, setAba] = useState<Aba | 'conversa'>('hoje')
   const [avisos, setAvisos] = useState<Aviso[]>([])
   const [trocas, setTrocas] = useState<Troca[]>([])
-  const [erroVoz, setErroVoz] = useState<string | null>(null)
+  const [pos, setPos] = useState<Pos>({ borda: 'topo', deslocamento: (JANELA.w - COMPRIMENTO.deitado) / 2, arrastando: false })
   const [sobre, setSobre] = useState(false)
+  const [toast, setToast] = useState<Toast | null>(null)
+  const [entendendo, setEntendendo] = useState<string | null>(null)
+  // Pergunta da IA que ficou no ar: aparece no entalho enquanto ele ouve a resposta.
+  const [pergunta, setPergunta] = useState<string | null>(null)
   const entrada = useRef<HTMLTextAreaElement>(null)
+  const historicoRef = useRef<Mensagem[]>([])
 
   const abrirPainel = useCallback((a?: Aba | 'conversa') => {
     if (a) setAba(a)
     setExpandido(true)
   }, [])
 
-  // Primeira vez (sem a chave da Groq): abre direto nas configurações.
+  useEffect(() => api.aoPosicao(setPos), [])
+
   useEffect(() => {
     api.configuracoes().then((c) => {
       if (!c.temChaveGroq) abrirPainel('config')
@@ -37,42 +50,70 @@ export function App() {
 
   useEffect(() => {
     api.expandido(expandido)
-    if (expandido) setTimeout(() => entrada.current?.focus(), 180)
+    if (expandido) setTimeout(() => entrada.current?.focus(), 200)
   }, [expandido])
 
-  const historico = useMemo<Mensagem[]>(
-    () => trocas.filter((t) => t.resposta && !t.resposta.erro).flatMap((t) => [{ papel: 'eu', texto: t.pergunta }, { papel: 'assistente', texto: t.resposta!.texto }]),
-    [trocas],
+  useEffect(() => {
+    historicoRef.current = trocas
+      .filter((t) => t.resposta && !t.resposta.erro)
+      .flatMap((t) => [
+        { papel: 'eu' as const, texto: t.pergunta },
+        { papel: 'assistente' as const, texto: t.resposta!.texto },
+      ])
+  }, [trocas])
+
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), toast.erro ? 7000 : 5000)
+    return () => clearTimeout(t)
+  }, [toast])
+
+  // O pedido. Falado com o painel fechado: a resposta simples aparece só no entalho e é falada;
+  // o que pede decisão (evento, Claude Code, desligar) abre o painel na conversa.
+  const enviarRef = useRef<(texto: string, falado: boolean) => Promise<void>>(async () => {})
+  const gravacao = usarGravacao(
+    useCallback((t: string) => enviarRef.current(t, true), []),
+    useCallback((e: string) => setToast({ texto: e, erro: true }), []),
   )
 
-  const enviar = useCallback(
-    async (texto: string, falado = false) => {
-      const t = texto.trim()
-      if (!t) return
-      const id = proximoId++
-      setTrocas((l) => [...l.slice(-19), { id, pergunta: t, resposta: null, falado }])
+  // Pergunta sem resposta some depois de 20 s.
+  useEffect(() => {
+    if (!pergunta || gravacao.estado !== 'parado' || entendendo) return
+    const t = setTimeout(() => setPergunta(null), 20_000)
+    return () => clearTimeout(t)
+  }, [pergunta, gravacao.estado, entendendo])
+
+  enviarRef.current = async (texto: string, falado: boolean) => {
+    const t = texto.trim()
+    if (!t) return
+    const id = proximoId++
+    const painelAberto = expandido
+    setPergunta(null)
+    setTrocas((l) => [...l.slice(-19), { id, pergunta: t, resposta: null, falado }])
+    if (!falado || painelAberto) {
       setAba('conversa')
       setExpandido(true)
-      const r = await api.conversar(t, historico)
-      setTrocas((l) => l.map((x) => (x.id === id ? { ...x, resposta: r } : x)))
-      if (r.aba) setAba(r.aba)
-      if (falado && dados.config?.responderFalando) falar(r.texto)
-    },
-    [historico, dados.config?.responderFalando],
-  )
+    } else setEntendendo(t)
+    const r = await api.conversar(t, historicoRef.current)
+    setEntendendo(null)
+    setTrocas((l) => l.map((x) => (x.id === id ? { ...x, resposta: r } : x)))
+    if (falado && r.pergunta) setPergunta(r.texto)
+    if (falado && !painelAberto && r.rapida && !r.pergunta) setToast({ texto: r.texto, desfazer: desfazerDe(r.cartoes), erro: r.erro })
+    else if (!(falado && r.pergunta && !painelAberto)) {
+      setAba(r.aba ?? 'conversa')
+      setExpandido(true)
+    }
+    if (falado) {
+      const ouvirDeNovo = r.pergunta ? () => gravacao.iniciar() : undefined
+      if (dados.config?.responderFalando) falar(r.texto, ouvirDeNovo)
+      else ouvirDeNovo?.()
+    }
+  }
 
-  const gravacao = usarGravacao(
-    useCallback((t: string) => enviar(t, true), [enviar]),
-    useCallback((e: string) => {
-      setErroVoz(e)
-      setTimeout(() => setErroVoz(null), 6000)
-    }, []),
-  )
-  const chamado = usarChamado(
-    !!dados.config?.chamadoPorVoz && !!dados.config.modeloVozDisponivel,
-    gravacao.estado !== 'parado',
-    gravacao.iniciar,
-  )
+  const chamado = usarChamado(!!dados.config?.chamadoPorVoz && !!dados.config.modeloVozDisponivel, gravacao.estado !== 'parado' || !!entendendo, () => {
+    calar()
+    gravacao.iniciar()
+  })
 
   useEffect(
     () =>
@@ -80,15 +121,18 @@ export function App() {
         if (c.tipo === 'alternar') setExpandido((e) => !e)
         else if (c.tipo === 'expandir') abrirPainel(c.aba)
         else if (c.tipo === 'recolher') setExpandido(false)
-        else if (c.tipo === 'falar') gravacao.alternar()
-        else if (c.tipo === 'aviso') setAvisos((l) => [...l.filter((a) => chaveAviso(a) !== chaveAviso(c.aviso)), c.aviso])
+        else if (c.tipo === 'falar') {
+          if (falando()) calar()
+          gravacao.alternar()
+        } else if (c.tipo === 'aviso') setAvisos((l) => [...l.filter((a) => chave(a) !== chave(c.aviso)), c.aviso])
       }),
-    [abrirPainel, gravacao.alternar],
+    [abrirPainel, gravacao],
   )
 
   useEffect(() => {
     const tecla = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || document.body.dataset.gravandoAtalho) return
+      calar()
       if (gravacao.estado === 'ouvindo') gravacao.cancelar()
       else setExpandido(false)
     }
@@ -97,16 +141,73 @@ export function App() {
   }, [gravacao])
 
   const aviso = avisos[0] ?? null
-  const fecharAviso = () => setAvisos((l) => l.slice(1))
+  const tirarAviso = () => setAvisos((l) => l.slice(1))
+  const toque = aviso?.tipo === 'evento' && aviso.marco > 1
 
-  // Estado do entalho, do menor para o maior.
-  const modo = expandido ? 'expandido' : aviso ? 'alerta' : gravacao.estado !== 'parado' ? 'voz' : erroVoz ? 'erro' : sobre ? 'sobre' : 'recolhido'
+  // O toque de "reunião em 10 min" some sozinho.
+  useEffect(() => {
+    if (!toque) return
+    const t = setTimeout(tirarAviso, 20_000)
+    return () => clearTimeout(t)
+  }, [toque, aviso])
+
+  const modo = pos.arrastando
+    ? 'arrastando'
+    : expandido
+      ? 'expandido'
+      : aviso
+        ? toque
+          ? 'toque'
+          : 'alerta'
+        : gravacao.estado !== 'parado'
+          ? 'voz'
+          : entendendo
+            ? 'entendendo'
+            : pergunta
+              ? 'pergunta'
+            : toast
+              ? 'toast'
+              : sobre
+                ? 'sobre'
+                : 'recolhido'
 
   const proximo = useMemo(() => proximoDoDia(dados, agora), [dados, agora])
+  const estilo = medidas(modo, pos, !!pergunta)
+  const emPe = !horizontal(pos.borda) && modo === 'recolhido'
+
+  // Arrastar o entalho: segurar e mover mais de 5 px. Só clicar abre o painel.
+  const arraste = useRef<{ x: number; y: number; movendo: boolean } | null>(null)
+  const aoApertar = (e: PE<HTMLButtonElement>) => {
+    if (e.button !== 0) return
+    e.currentTarget.setPointerCapture(e.pointerId)
+    arraste.current = { x: e.screenX, y: e.screenY, movendo: false }
+  }
+  const aoMover = (e: PE<HTMLButtonElement>) => {
+    const a = arraste.current
+    if (!a || a.movendo) return
+    if (Math.hypot(e.screenX - a.x, e.screenY - a.y) > 5) {
+      a.movendo = true
+      api.arrastar('inicio')
+    }
+  }
+  const aoSoltar = () => {
+    const a = arraste.current
+    arraste.current = null
+    if (a?.movendo) api.arrastar('fim')
+    else if (a) abrirPainel()
+  }
+  const pilula = { onPointerDown: aoApertar, onPointerMove: aoMover, onPointerUp: aoSoltar, 'aria-label': 'Abrir o assistente (segure e arraste para mudar de lugar)' }
+
+  const marca = (
+    <span className={`marca-casca ${chamado === 'escutando' ? 'atento' : ''}`} title={chamado === 'escutando' ? 'Ouvindo o "Ei, Zarb"' : undefined}>
+      <img className="marca" src={marcaZ} alt="" />
+    </span>
+  )
 
   return (
     <div
-      className={`entalho ${modo}`}
+      className={`entalho ${pos.borda} ${modo}`}
+      style={estilo}
       onMouseEnter={() => {
         setSobre(true)
         api.mouseSobre(true)
@@ -127,60 +228,157 @@ export function App() {
             setTrocas([])
             setAba('hoje')
           }}
-          enviar={enviar}
+          enviar={(t) => enviarRef.current(t, false)}
           gravacao={gravacao}
           chamado={chamado}
           entrada={entrada}
           fechar={() => setExpandido(false)}
         />
-      ) : modo === 'alerta' && aviso ? (
-        <Alerta aviso={aviso} agora={agora} fechar={fecharAviso} mais={avisos.length - 1} />
-      ) : (
-        <button className="pilula" onClick={() => abrirPainel()} aria-label="Abrir o assistente">
-          <span className={`marca-z ${chamado === 'escutando' ? 'atento' : ''}`} title={chamado === 'escutando' ? 'Ouvindo o "Ei, Zarb"' : undefined}>
-            z
-          </span>
-          {modo === 'voz' ? (
-            <span className="onda" aria-live="polite">
-              {gravacao.estado === 'transcrevendo' ? (
-                <span className="texto-pilula">Entendendo…</span>
-              ) : (
-                <>
-                  {[0.6, 1, 0.75, 1, 0.55].map((f, i) => (
-                    <i key={i} style={{ transform: `scaleY(${0.25 + gravacao.nivel * f})` }} />
-                  ))}
-                  <span className="texto-pilula">Ouvindo</span>
-                </>
-              )}
-            </span>
-          ) : modo === 'erro' ? (
-            <span className="texto-pilula erro-texto">{erroVoz}</span>
+      ) : (modo === 'alerta' || modo === 'toque') && aviso ? (
+        <Avisos aviso={aviso} agora={agora} fechar={tirarAviso} marca={marca} mais={avisos.length - 1} />
+      ) : modo === 'voz' ? (
+        <div className="pilula" aria-live="polite">
+          {marca}
+          {gravacao.estado === 'transcrevendo' ? (
+            <span className="linha-suave">Entendendo…</span>
           ) : (
-            <span className="texto-pilula">
-              <strong>{hora(agora)}</strong>
-              {proximo && <span className="proximo"> · {proximo}</span>}
-            </span>
+            <>
+              <span className="onda" aria-hidden="true">
+                {[0.5, 1, 0.7, 1, 0.45].map((f, i) => (
+                  <i key={i} style={{ transform: `scaleY(${0.25 + gravacao.nivel * f})` }} />
+                ))}
+              </span>
+              <span className="linha-suave" style={{ color: '#fff' }}>
+                {pergunta ?? 'Ouvindo'}
+              </span>
+              <span className="ponto-vermelho" aria-label="Microfone ligado" />
+            </>
           )}
-          {gravacao.estado === 'ouvindo' && <span className="ponto-gravando" aria-label="Microfone ligado" />}
+        </div>
+      ) : modo === 'pergunta' ? (
+        <button type="button" className="pilula" onClick={() => gravacao.iniciar()} aria-label="Responder falando">
+          {marca}
+          <span className="linha-suave" style={{ color: '#fff' }}>
+            {pergunta}
+          </span>
+          <span className="chip">Responder</span>
+        </button>
+      ) : modo === 'entendendo' ? (
+        <div className="pilula" aria-live="polite">
+          {marca}
+          <span className="linha-suave">"{entendendo}"</span>
+        </div>
+      ) : modo === 'toast' && toast ? (
+        <div className="pilula" role="status">
+          {marca}
+          <span className={toast.erro ? 'linha-suave erro-texto' : 'linha-suave'} style={toast.erro ? undefined : { color: '#fff' }}>
+            {toast.texto}
+          </span>
+          {toast.desfazer && (
+            <button
+              type="button"
+              className="link-texto"
+              onClick={() => {
+                toast.desfazer?.()
+                setToast({ texto: 'Desfeito.' })
+              }}
+            >
+              Desfazer
+            </button>
+          )}
+        </div>
+      ) : modo === 'sobre' ? (
+        <button type="button" className="pilula-duas" {...pilula}>
+          <span className="primeira">
+            {marca}
+            <span className="hora">{hora(agora)}</span>
+            <span className="linha-suave">{proximo?.texto ?? 'Nada nas próximas horas'}</span>
+            {proximo && <span className="chip">{proximo.quando}</span>}
+          </span>
+          <span className="segunda">{resumo(dados, agora)} · clique para abrir</span>
+        </button>
+      ) : emPe ? (
+        <button type="button" className="pilula em-pe" {...pilula}>
+          {marca}
+          <span className="vertical">
+            {hora(agora)}
+            {proximo ? ` · ${proximo.quando}` : ''}
+          </span>
+        </button>
+      ) : (
+        <button type="button" className="pilula" {...pilula}>
+          {marca}
+          <span className="hora">{hora(agora)}</span>
+          <span className="linha-suave">{proximo?.texto ?? ''}</span>
+          {proximo && <span className="chip">{proximo.quando}</span>}
         </button>
       )}
     </div>
   )
 }
 
-function chaveAviso(a: Aviso) {
-  return a.tipo === 'lembrete' ? `t${a.tarefa.id}` : `e${a.evento.id}`
+// Tamanho e lugar do entalho dentro da janela transparente, conforme o estado e a borda.
+function medidas(modo: string, pos: Pos, comPergunta = false): CSSProperties {
+  if (modo === 'expandido') return horizontal(pos.borda) ? { width: 940, height: 640, left: 10 } : { width: 940, height: 640, top: 10 }
+  const tamanhos: Record<string, [number, number]> = {
+    arrastando: [320, 38],
+    recolhido: [320, 38],
+    sobre: [380, 62],
+    voz: [320, 40],
+    pergunta: [440, 40],
+    entendendo: [420, 40],
+    toast: [440, 40],
+    toque: [340, 38],
+    alerta: [440, 118],
+  }
+  let [w, h] = tamanhos[modo] ?? [320, 38]
+  if (modo === 'voz' && comPergunta) w = 440
+  if (modo === 'recolhido' && !horizontal(pos.borda)) [w, h] = [40, COMPRIMENTO.emPe]
+  if (modo === 'arrastando') return { width: w, height: h, top: 0, left: (JANELA.w - w) / 2 }
+  if (horizontal(pos.borda)) {
+    const centro = pos.deslocamento + COMPRIMENTO.deitado / 2
+    return { width: w, height: h, left: Math.min(Math.max(centro - w / 2, 0), JANELA.w - w) }
+  }
+  const centro = pos.deslocamento + COMPRIMENTO.emPe / 2
+  return { width: w, height: h, top: Math.min(Math.max(centro - h / 2, 0), JANELA.h - h) }
 }
 
-// O que aparece no entalho fechado: compromisso ou lembrete mais próximo das próximas 3 horas.
-function proximoDoDia(d: ReturnType<typeof usarDados>, agora: Date): string | null {
+function chave(a: Aviso) {
+  return a.tipo === 'lembrete' ? `t${a.tarefa.id}` : a.tipo === 'habito' ? `h${a.habito.id}` : `e${a.evento.id}${a.marco}`
+}
+
+// Desfazer do toast: só o que foi criado ou marcado agora.
+function desfazerDe(cartoes: Cartao[]): (() => void) | undefined {
+  const fns = cartoes.flatMap((c) => {
+    if (c.tipo === 'tarefa') return [() => api.apagarTarefa(c.tarefa.id)]
+    if (c.tipo === 'concluida') return [() => api.reabrirTarefa(c.tarefa.id)]
+    if (c.tipo === 'habito') {
+      const agora = c.habito.registro[diaLocal(new Date())] ?? 0
+      return [() => api.registrarHabito(c.habito.id, c.antes - agora)]
+    }
+    return []
+  })
+  return fns.length ? () => fns.forEach((f) => f()) : undefined
+}
+
+// O que aparece no entalho fechado: reunião ou lembrete das próximas 3 horas.
+function proximoDoDia(d: Dados, agora: Date): { texto: string; quando: string } | null {
   const ev = eventosDoDia(d.agenda.eventos, agora).find((e) => !e.diaInteiro && new Date(e.fim) > agora)
   const lem = d.tarefas.find((t) => !t.feita && t.quando && new Date(t.quando) > agora && mesmoDia(new Date(t.quando), agora))
-  const opcoes = [
-    ev && { min: minutosAte(ev.inicio, agora), texto: ev.titulo },
-    lem && { min: minutosAte(lem.quando!, agora), texto: lem.titulo },
-  ].filter((x): x is { min: number; texto: string } => !!x && x.min <= 180)
+  const opcoes = [ev && { min: minutosAte(ev.inicio, agora), texto: ev.titulo }, lem && { min: minutosAte(lem.quando!, agora), texto: lem.titulo }].filter(
+    (x): x is { min: number; texto: string } => !!x && x.min <= 180,
+  )
   if (!opcoes.length) return null
   const p = opcoes.sort((a, b) => a.min - b.min)[0]
-  return `${p.texto} ${p.min <= 0 ? 'agora' : emQuanto(p.min)}`
+  return { texto: p.texto, quando: p.min <= 0 ? 'agora' : emQuanto(p.min).replace(/^em /, '') }
+}
+
+function resumo(d: Dados, agora: Date): string {
+  const atrasadas = d.tarefas.filter((t) => !t.feita && t.quando && new Date(t.quando) <= agora).length
+  const deHoje = d.habitos.filter((h) => ehDiaDele(h, agora))
+  const partes = [
+    atrasadas ? `${atrasadas} ${atrasadas === 1 ? 'tarefa atrasada' : 'tarefas atrasadas'}` : 'nada atrasado',
+    deHoje.length ? `${deHoje.filter((h) => feitoNoDia(h, agora)).length} de ${deHoje.length} hábitos` : null,
+  ]
+  return partes.filter(Boolean).join(' · ')
 }

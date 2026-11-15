@@ -1,7 +1,8 @@
 import { safeStorage } from 'electron'
 import { gravarJson, lerJson } from './armazem'
 import { MODELO_PADRAO } from '../shared/groq'
-import type { PastaClaude } from '../shared/tipos'
+import { POSICAO_PADRAO } from '../shared/posicao'
+import type { PastaClaude, Posicao } from '../shared/tipos'
 
 export type Gravado = {
   atalhoAbrir: string
@@ -15,6 +16,8 @@ export type Gravado = {
   avisoEventoMin: number
   copiarLembretesParaAgenda: boolean
   pastasClaude: PastaClaude[]
+  posicao: Posicao
+  silenciarAvisos: boolean
   googleClientId?: string
   // Segredos cifrados pelo Windows (DPAPI, via safeStorage), em base64. Nunca em texto puro.
   groqCifrada?: string
@@ -35,6 +38,8 @@ const PADRAO: Gravado = {
   avisoEventoMin: 10,
   copiarLembretesParaAgenda: false,
   pastasClaude: [],
+  posicao: POSICAO_PADRAO,
+  silenciarAvisos: false,
 }
 
 export function ler(): Gravado {

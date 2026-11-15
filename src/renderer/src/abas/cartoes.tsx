@@ -1,87 +1,117 @@
 import { useState } from 'react'
-import { descreverQuando, descreverRepetir } from '../../../shared/datas'
+import { descreverQuando, descreverRepetir, diaLocal } from '../../../shared/datas'
+import { progresso } from '../../../shared/habitos'
 import type { Cartao, PastaClaude, RascunhoEvento } from '../../../shared/tipos'
 import { Icone } from '../icones'
 import type { Dados } from '../usarDados'
 import { api, doCampo, paraCampo } from '../util'
 import { FormAtalho } from './Atalhos'
-import { Hoje } from './Hoje'
 import { Mensagem } from './comum'
 
 export function CartaoDaResposta({ c, dados, agora }: { c: Cartao; dados: Dados; agora: Date }) {
   const [feito, setFeito] = useState<string | null>(null)
-  if (feito) return <p className="cartao-feito">{feito}</p>
+  if (feito) return <p className="meta" style={{ paddingLeft: 4 }}>{feito}</p>
+
+  const linhaUnica = (cor: string, icone: Parameters<typeof Icone>[0]['nome'], titulo: string, sub: string, desfazer?: () => Promise<unknown>) => (
+    <div className="cartao-conversa linha-unica">
+      <span style={{ color: cor, display: 'grid' }}>
+        <Icone nome={icone} tamanho={18} />
+      </span>
+      <span style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <span>{titulo}</span>
+        <span className="meta">{sub}</span>
+      </span>
+      {desfazer && (
+        <button
+          type="button"
+          className="link"
+          onClick={async () => {
+            await desfazer()
+            setFeito('Desfeito.')
+          }}
+        >
+          Desfazer
+        </button>
+      )}
+    </div>
+  )
 
   switch (c.tipo) {
     case 'tarefa': {
       const t = c.tarefa
       const rep = descreverRepetir(t.repetir)
-      return (
-        <div className="cartao">
-          <span className={`cartao-icone ${t.quando ? 'lembrete' : 'tarefa'}`}>
-            <Icone nome={t.quando ? 'relogio' : 'check'} />
-          </span>
-          <div className="cartao-texto">
-            <strong>{t.titulo}</strong>
-            <span>{t.quando ? `${descreverQuando(t.quando, agora)}${rep ? ` · ${rep}` : ''}` : 'Tarefa'}</span>
-          </div>
-          <button
-            className="discreto pequeno"
-            onClick={async () => {
-              await api.apagarTarefa(t.id)
-              setFeito('Desfeito.')
-            }}
-          >
-            Desfazer
-          </button>
-        </div>
-      )
+      return linhaUnica('var(--ambar)', t.quando ? 'relogio' : 'check', t.titulo, t.quando ? `Lembrete para ${descreverQuando(t.quando, agora)}${rep ? `, ${rep}` : ''}` : 'Tarefa anotada', () => api.apagarTarefa(t.id))
     }
     case 'concluida':
-      return (
-        <div className="cartao">
-          <span className="cartao-icone tarefa">
-            <Icone nome="check" />
-          </span>
-          <div className="cartao-texto">
-            <strong>{c.tarefa.titulo}</strong>
-            <span>Marcada como feita</span>
-          </div>
-          <button
-            className="discreto pequeno"
-            onClick={async () => {
-              await api.reabrirTarefa(c.tarefa.id)
-              setFeito('Reaberta.')
-            }}
-          >
-            Desfazer
-          </button>
-        </div>
-      )
+      return linhaUnica('var(--verde)', 'check', c.tarefa.titulo, 'Marcada como feita', () => api.reabrirTarefa(c.tarefa.id))
+    case 'habito': {
+      const atual = c.habito.registro[diaLocal(agora)] ?? 0
+      return linhaUnica('var(--azul)', 'habito', c.habito.nome, c.habito.meta ? progresso(c.habito, agora).texto : 'Feito hoje', () => api.registrarHabito(c.habito.id, c.antes - atual))
+    }
+    case 'volume':
+      return linhaUnica('var(--suave)', 'mic', c.mudo ? 'Som no mudo' : `Volume em ${c.volume}%`, 'PC')
     case 'aberto':
       return null
     case 'hoje':
-      return (
-        <div className="cartao bloco">
-          <Hoje dados={dados} agora={agora} compacto />
-        </div>
-      )
+      return <ResumoCurto dados={dados} agora={agora} />
     case 'evento':
       return <CartaoEvento inicial={c.rascunho} aoTerminar={(msg) => setFeito(msg ?? 'Descartado.')} />
     case 'claude':
       return <CartaoClaude pedido={c.pedido} pastaId={c.pastaId} pastas={dados.config?.pastasClaude ?? []} aoTerminar={(msg) => setFeito(msg ?? 'Descartado.')} />
     case 'ensinar':
       return (
-        <div className="cartao bloco">
-          <span className="cartao-rotulo">Atalho novo</span>
+        <div style={{ width: '78%' }}>
           <FormAtalho inicial={{ nome: c.nome, destino: c.destino }} fechar={(salvou) => setFeito(salvou ? 'Atalho salvo.' : 'Descartado.')} />
         </div>
       )
+    case 'pc': {
+      const nome = { bloquear: 'Bloquear', suspender: 'Suspender', reiniciar: 'Reiniciar', desligar: 'Desligar' }[c.acao]
+      return (
+        <div className="cartao-conversa" role="alertdialog" aria-label={`${nome} o PC?`} style={{ background: 'var(--vermelho-fundo)' }}>
+          <span>{nome} o PC?</span>
+          <div className="botoes">
+            <button
+              type="button"
+              className="botao perigo"
+              onClick={async () => {
+                const r = await api.pc({ tipo: 'energia', acao: c.acao, confirmado: true })
+                setFeito(r.ok ? `${nome}: pedido enviado ao Windows.` : r.erro)
+              }}
+            >
+              {nome} agora
+            </button>
+            <button type="button" className="botao leve" onClick={() => setFeito('Cancelado.')}>
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )
+    }
   }
 }
 
+function ResumoCurto({ dados, agora }: { dados: Dados; agora: Date }) {
+  const pend = dados.tarefas.filter((t) => !t.feita && t.quando && new Date(t.quando).toDateString() === agora.toDateString())
+  const evs = dados.agenda.eventos.filter((e) => !e.diaInteiro && new Date(e.inicio).toDateString() === agora.toDateString() && new Date(e.fim) > agora)
+  const itens = [...evs.map((e) => ({ t: e.inicio, txt: e.titulo })), ...pend.map((t) => ({ t: t.quando!, txt: t.titulo }))].sort((a, b) => a.t.localeCompare(b.t))
+  return (
+    <div className="cartao-conversa">
+      {itens.length ? (
+        itens.slice(0, 6).map((i, n) => (
+          <div key={n} className="linha" style={{ minHeight: 30 }}>
+            <span className="hora-coluna">{new Date(i.t).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+            <span className="principal-texto">{i.txt}</span>
+          </div>
+        ))
+      ) : (
+        <span className="meta">Nada pela frente hoje.</span>
+      )}
+    </div>
+  )
+}
+
 // Evento só é criado no Google quando o Paulo clica em Criar.
-export function CartaoEvento({ inicial, aoTerminar }: { inicial: RascunhoEvento; aoTerminar: (msg?: string) => void }) {
+export function CartaoEvento({ inicial, aoTerminar, largo }: { inicial: RascunhoEvento; aoTerminar: (msg?: string) => void; largo?: boolean }) {
   const [titulo, setTitulo] = useState(inicial.titulo)
   const [inicio, setInicio] = useState(paraCampo(inicial.inicio))
   const [duracao, setDuracao] = useState(inicial.duracaoMin)
@@ -89,48 +119,47 @@ export function CartaoEvento({ inicial, aoTerminar }: { inicial: RascunhoEvento;
   const [comMeet, setComMeet] = useState(inicial.comMeet)
   const [erro, setErro] = useState<string | null>(null)
   const [criando, setCriando] = useState(false)
-
-  const criar = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const iso = doCampo(inicio)
-    if (!iso) return setErro('Escolha dia e hora.')
-    const lista = convidados.split(/[,;\s]+/).filter(Boolean)
-    const invalidos = lista.filter((x) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x))
-    if (invalidos.length) return setErro(`E-mail inválido: ${invalidos.join(', ')}`)
-    setCriando(true)
-    const r = await api.criarEvento({ titulo, inicio: iso, duracaoMin: duracao, convidados: lista, comMeet })
-    setCriando(false)
-    if (!r.ok) return setErro(r.erro)
-    aoTerminar(`Evento criado: ${titulo}.${lista.length ? ' Convites enviados.' : ''}`)
-  }
+  const lista = convidados.split(/[,;\s]+/).filter(Boolean)
 
   return (
-    <form className="cartao bloco formulario" onSubmit={criar}>
-      <span className="cartao-rotulo">
-        <Icone nome="agenda" tamanho={15} /> Evento no Google Agenda
-      </span>
-      <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título" aria-label="Título" />
+    <form
+      className="cartao-conversa"
+      style={largo ? { width: '100%' } : undefined}
+      onSubmit={async (e) => {
+        e.preventDefault()
+        const iso = doCampo(inicio)
+        if (!iso) return setErro('Escolha dia e hora.')
+        const invalidos = lista.filter((x) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x))
+        if (invalidos.length) return setErro(`E-mail inválido: ${invalidos.join(', ')}`)
+        setCriando(true)
+        const r = await api.criarEvento({ titulo, inicio: iso, duracaoMin: duracao, convidados: lista, comMeet })
+        setCriando(false)
+        if (!r.ok) return setErro(r.erro)
+        aoTerminar(`Evento criado: ${titulo}.${lista.length ? ' Convite enviado.' : ''}`)
+      }}
+    >
+      <span className="meta">Evento no Google Agenda · confira e crie</span>
+      <input className="campo-texto" style={{ fontWeight: 600 }} value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título" aria-label="Título" />
       <div className="linha-campos">
-        <input type="datetime-local" value={inicio} onChange={(e) => setInicio(e.target.value)} aria-label="Início" />
-        <select value={duracao} onChange={(e) => setDuracao(Number(e.target.value))} aria-label="Duração">
-          {[15, 30, 45, 60, 90, 120].map((m) => (
+        <input type="datetime-local" className="campo-texto" value={inicio} onChange={(e) => setInicio(e.target.value)} aria-label="Início" />
+        <select className="selecao" value={duracao} onChange={(e) => setDuracao(Number(e.target.value))} aria-label="Duração">
+          {[...new Set([15, 30, 45, 60, 90, 120, duracao])].sort((a, b) => a - b).map((m) => (
             <option key={m} value={m}>
-              {m < 60 ? `${m} min` : `${m / 60}h${m % 60 ? '30' : ''}`}
+              {m < 60 ? `${m} min` : `${Math.floor(m / 60)}h${m % 60 ? String(m % 60).padStart(2, '0') : ''}`}
             </option>
           ))}
-          {![15, 30, 45, 60, 90, 120].includes(duracao) && <option value={duracao}>{duracao} min</option>}
         </select>
-      </div>
-      <input value={convidados} onChange={(e) => setConvidados(e.target.value)} placeholder="Convidados (e-mails, opcional)" aria-label="Convidados" />
-      <label className="caixa">
-        <input type="checkbox" checked={comMeet} onChange={(e) => setComMeet(e.target.checked)} /> Criar link do Meet
-      </label>
-      {erro && <Mensagem tipo="erro">{erro}</Mensagem>}
-      <div className="botoes">
-        <button type="submit" className="primario" disabled={!titulo.trim() || criando}>
-          {criando ? 'Criando…' : 'Criar'}
+        <button type="button" className={`botao ${comMeet ? '' : 'leve'}`} aria-pressed={comMeet} onClick={() => setComMeet((v) => !v)}>
+          <Icone nome="video" tamanho={15} /> {comMeet ? 'Com Meet' : 'Sem Meet'}
         </button>
-        <button type="button" className="discreto" onClick={() => aoTerminar()}>
+      </div>
+      <input className="campo-texto" value={convidados} onChange={(e) => setConvidados(e.target.value)} placeholder="Convidados (e-mails, opcional)" aria-label="Convidados" />
+      {erro && <Mensagem erro>{erro}</Mensagem>}
+      <div className="botoes">
+        <button type="submit" className="botao principal" disabled={!titulo.trim() || criando}>
+          {criando ? 'Criando…' : lista.length ? 'Criar e enviar convite' : 'Criar'}
+        </button>
+        <button type="button" className="botao leve" onClick={() => aoTerminar()}>
           Descartar
         </button>
       </div>
@@ -143,37 +172,43 @@ function CartaoClaude({ pedido, pastaId, pastas, aoTerminar }: { pedido: string;
   const [texto, setTexto] = useState(pedido)
   const [pasta, setPasta] = useState(pastaId ?? pastas[0]?.id ?? '')
   const [erro, setErro] = useState<string | null>(null)
-  const mandar = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const r = await api.mandarClaude(pasta, texto)
-    if (!r.ok) return setErro(r.erro)
-    aoTerminar(`Claude Code aberto em ${pastas.find((p) => p.id === pasta)?.nome}. Ele vai pedir sua aprovação antes de mexer em algo.`)
-  }
+  const atual = pastas.find((p) => p.id === pasta)
   return (
-    <form className="cartao bloco formulario" onSubmit={mandar}>
-      <span className="cartao-rotulo">
-        <Icone nome="terminal" tamanho={15} /> Pedido para o Claude Code
-      </span>
+    <form
+      className="cartao-conversa"
+      onSubmit={async (e) => {
+        e.preventDefault()
+        const r = await api.mandarClaude(pasta, texto)
+        if (!r.ok) return setErro(r.erro)
+        aoTerminar(`Claude Code aberto em ${atual?.nome}. Ele pede sua aprovação antes de mexer em algo.`)
+      }}
+    >
+      <span className="meta">Pedido para o Claude Code · revise e mande</span>
       {pastas.length ? (
-        <select value={pasta} onChange={(e) => setPasta(e.target.value)} aria-label="Projeto">
-          {pastas.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.nome} · {p.caminho}
-            </option>
-          ))}
-        </select>
+        <div className="linha" style={{ minHeight: 30 }}>
+          <span className="meta">Projeto:</span>
+          <select className="selecao" style={{ height: 30 }} value={pasta} onChange={(e) => setPasta(e.target.value)} aria-label="Projeto">
+            {pastas.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nome}
+              </option>
+            ))}
+          </select>
+          <span className="meta">{atual?.caminho}</span>
+        </div>
       ) : (
-        <Mensagem tipo="erro">Cadastre a pasta do projeto em Configurações › Claude Code.</Mensagem>
+        <Mensagem erro>Cadastre a pasta do projeto em Configurações › Claude Code.</Mensagem>
       )}
-      <textarea value={texto} onChange={(e) => setTexto(e.target.value)} rows={4} aria-label="Pedido" />
-      {erro && <Mensagem tipo="erro">{erro}</Mensagem>}
+      <textarea className="campo-texto" rows={3} value={texto} onChange={(e) => setTexto(e.target.value)} aria-label="Pedido" />
+      {erro && <Mensagem erro>{erro}</Mensagem>}
       <div className="botoes">
-        <button type="submit" className="primario" disabled={!pastas.length || !texto.trim()}>
+        <button type="submit" className="botao principal" disabled={!pastas.length || !texto.trim()}>
           Mandar
         </button>
-        <button type="button" className="discreto" onClick={() => aoTerminar()}>
+        <button type="button" className="botao leve" onClick={() => aoTerminar()}>
           Descartar
         </button>
+        <span className="meta">Abre o terminal; o Claude pede aprovação antes de mexer.</span>
       </div>
     </form>
   )

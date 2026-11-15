@@ -32,7 +32,11 @@ jobs:
           Expand-Archive voz.zip -DestinationPath voz-tmp
           New-Item -ItemType Directory -Force resources/voz | Out-Null
           tar -czf resources/voz/modelo-pt.tar.gz -C voz-tmp vosk-model-small-pt-0.3
+      # Login do Google: credencial de app para computador do Google Cloud da Zarb (segredos do repositório).
       - run: npm run dist
+        env:
+          MAIN_VITE_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          MAIN_VITE_GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
       - uses: actions/upload-artifact@v4
         with:
           name: instalador

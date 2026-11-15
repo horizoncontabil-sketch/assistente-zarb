@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { gravarJson, lerJson } from './armazem'
 import { adicionarCopia, podar } from '../shared/copias'
 import { limparAntigas, ordenar } from '../shared/tarefas'
+import type { Habito } from '../shared/habitos'
 import type { Atalho, Copia, Evento, Tarefa } from '../shared/tipos'
 
 const OS = 'https://os.zarbmedia.com.br'
@@ -33,6 +34,8 @@ const ATALHOS_INICIAIS: [string, string][] = [
 let tarefas: Tarefa[] = ordenar(limparAntigas(lerJson<Tarefa[]>('tarefas', []), new Date()))
 let atalhos: Atalho[] = lerJson<Atalho[] | null>('atalhos', null) ?? ATALHOS_INICIAIS.map(([nome, destino]) => ({ id: randomUUID(), nome, destino, tipo: 'site' as const }))
 let copias: Copia[] = podar(lerJson<Copia[]>('copias', []), new Date())
+let habitos: Habito[] = lerJson<Habito[]>('habitos', [])
+let avisosHabitos: Record<string, string> = lerJson<Record<string, string>>('avisos-habitos', {})
 let agenda = lerJson<{ eventos: Evento[]; lidoEm: string | null }>('agenda', { eventos: [], lidoEm: null })
 
 export const ler = {
@@ -40,6 +43,18 @@ export const ler = {
   atalhos: () => atalhos,
   copias: () => copias,
   agenda: () => agenda,
+  habitos: () => habitos,
+  avisosHabitos: () => avisosHabitos,
+}
+
+export function mudarHabitos(f: (h: Habito[]) => Habito[]) {
+  habitos = f(habitos)
+  gravarJson('habitos', habitos)
+}
+
+export function marcarAvisoHabito(id: string, em: Date) {
+  avisosHabitos = { ...avisosHabitos, [id]: em.toISOString() }
+  gravarJson('avisos-habitos', avisosHabitos)
 }
 
 export function mudarTarefas(f: (t: Tarefa[]) => Tarefa[]) {

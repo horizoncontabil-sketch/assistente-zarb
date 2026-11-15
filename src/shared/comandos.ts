@@ -13,16 +13,20 @@ export function normalizar(t: string): string {
 
 export type ComandoDireto =
   | { tipo: 'abrir'; atalho: Atalho }
+  | { tipo: 'volume'; mudanca: { nivel?: number; mudar?: number; mudo?: boolean } }
+  | { tipo: 'bloquear' }
   | { tipo: 'hoje' }
-  | { tipo: 'aba'; aba: 'tarefas' | 'agenda' | 'copiados' | 'atalhos' | 'config' }
+  | { tipo: 'aba'; aba: 'tarefas' | 'agenda' | 'copiados' | 'atalhos' | 'config' | 'habitos' | 'pc' }
 
 const HOJE = /^(o que (eu )?tenho( pra| para)? hoje|minha agenda( de hoje)?|agenda( de)? hoje|meu dia|resumo do dia|hoje)$/
-const ABAS: [RegExp, 'tarefas' | 'agenda' | 'copiados' | 'atalhos' | 'config'][] = [
+const ABAS: [RegExp, 'tarefas' | 'agenda' | 'copiados' | 'atalhos' | 'config' | 'habitos' | 'pc'][] = [
   [/^((minhas |ver )?tarefas( pendentes)?|tenho tarefas?( pendentes?)?|lista de tarefas)$/, 'tarefas'],
   [/^((minha |ver )?agenda( da semana)?|compromissos)$/, 'agenda'],
   [/^((ver )?copiados|historico( do que copiei)?|o que (eu )?copiei)$/, 'copiados'],
   [/^((meus |ver )?atalhos)$/, 'atalhos'],
   [/^(configuracoes|config|ajustes)$/, 'config'],
+  [/^((meus )?habitos)$/, 'habitos'],
+  [/^(pc|computador)$/, 'pc'],
 ]
 
 export function acharAtalho(nome: string, atalhos: Atalho[]): Atalho | null {
@@ -42,6 +46,12 @@ export function comandoDireto(texto: string, atalhos: Atalho[]): ComandoDireto |
   const t = normalizar(texto).replace(/^(ei zarb|zarb) /, '').replace(/ (por favor|pf|pfv)$/, '')
   if (HOJE.test(t)) return { tipo: 'hoje' }
   for (const [re, aba] of ABAS) if (re.test(t)) return { tipo: 'aba', aba }
+  if (/^(bloqueia|bloquear|trava|travar) (o pc|o computador|a tela)$/.test(t)) return { tipo: 'bloquear' }
+  if (/^(aumenta|sobe|aumentar|subir) (o )?(volume|som)( um pouco)?$/.test(t)) return { tipo: 'volume', mudanca: { mudar: 10 } }
+  if (/^(abaixa|baixa|diminui|abaixar|diminuir) (o )?(volume|som)( um pouco)?$/.test(t)) return { tipo: 'volume', mudanca: { mudar: -10 } }
+  if (/^(muta|mutar|silencia|silenciar|tira) (o )?(som|volume|audio)$/.test(t)) return { tipo: 'volume', mudanca: { mudo: true } }
+  const vol = t.match(/^(volume|som)( (em|no|pra|para))? (\d{1,3})( por cento)?$/)
+  if (vol) return { tipo: 'volume', mudanca: { nivel: Math.min(100, Number(vol[4])) } }
   const abrir = t.match(/^(abre|abrir|abra|abrir o|abrir a|entra no|entra na|vai no|vai na) (.+)$/)
   if (abrir) {
     const atalho = acharAtalho(abrir[2], atalhos)

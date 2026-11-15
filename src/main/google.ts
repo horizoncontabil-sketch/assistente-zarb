@@ -23,7 +23,16 @@ function gravarTokens(t: Tokens) {
   config.gravar({ googleTokensCifrados: config.cifrar(JSON.stringify(t)) })
 }
 
+// Credencial de "app para computador" do Google Cloud da Zarb, posta na montagem (segredos do GitHub).
+// Em app de computador o Google não trata essa chave como segredo; o app é Interno, então só contas
+// da Zarb entram. Sem ela (versão de desenvolvimento), vale a cadastrada à mão nas configurações.
+const EMBUTIDO = {
+  id: import.meta.env.MAIN_VITE_GOOGLE_CLIENT_ID as string | undefined,
+  segredo: import.meta.env.MAIN_VITE_GOOGLE_CLIENT_SECRET as string | undefined,
+}
+
 function cliente() {
+  if (EMBUTIDO.id && EMBUTIDO.segredo) return { id: EMBUTIDO.id, segredo: EMBUTIDO.segredo }
   const c = config.ler()
   const segredo = config.decifrar(c.googleSegredoCifrado)
   return c.googleClientId && segredo ? { id: c.googleClientId, segredo } : null

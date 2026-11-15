@@ -21,6 +21,11 @@ const P: Record<string, string> = {
   editar: 'M12.5 4.5l3 3-8.5 8.5H4v-3Z',
   sair: 'M8 4.5H4.5v11H8 M11.5 6.5 15 10l-3.5 3.5 M15 10H8',
   atualizar: 'M15.5 8A6 6 0 0 0 4.6 7 M4.5 3.5V7H8 M4.5 12a6 6 0 0 0 10.9 1 M15.5 16.5V13H12',
+  pc: 'M3 4.5h14v9H3z M7.5 16.5h5 M10 13.5v3',
+  globo: 'M10 17a7 7 0 1 0 0-14 7 7 0 0 0 0 14Z M3 10h14 M10 3c2 2 2.8 4.4 2.8 7S12 15 10 17 M10 3C8 5 7.2 7.4 7.2 10S8 15 10 17',
+  pasta: 'M3 6.5V15h14V8H9.5L8 6.5Z',
+  habito: 'M10 17.5a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15Z M10 6v4l2.5 2',
+  voltar: 'M12.5 4.5 7 10l5.5 5.5',
 }
 
 export type NomeIcone = keyof typeof P

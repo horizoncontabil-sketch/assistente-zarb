@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { validarAcao, type Contexto } from './acoes'
 import { isoLocal } from './datas'
 import { tipoDoDestino } from './destino'
@@ -12,6 +12,7 @@ const ctx: Contexto = {
   atalhos: [{ id: 'a', nome: 'Monday', destino: 'https://monday.com', tipo: 'site' }],
   pastas: [{ id: 'p', nome: 'zarb-os', caminho: 'C:\\x' }],
   tarefas: [tarefa('1', 'Ligar para a Costare'), tarefa('2', 'Revisar deck'), tarefa('3', 'Revisar planilha'), tarefa('4', 'Pagar boleto', true)],
+  habitos: [],
 }
 const amanha9 = isoLocal(new Date(2026, 10, 16, 9, 0))
 
@@ -58,4 +59,20 @@ it('destino aceita só https e caminho do Windows', () => {
   expect(tipoDoDestino('C:\\Users\\Paulo\\Desktop')).toBe('pasta')
   expect(tipoDoDestino('C:\\Program Files\\App\\app.exe')).toBe('programa')
   expect(tipoDoDestino('C:\\x" & calc')).toBeNull()
+})
+
+describe('ferramentas novas', () => {
+  const agua = { id: 'a', nome: 'Beber 2 litros de água', dias: [0, 1, 2, 3, 4, 5, 6], meta: { total: 2, unidade: 'L', passo: 0.25 }, lembrete: null, registro: {}, criadoEm: '' }
+  const c2 = { ...ctx, habitos: [agua] }
+  it('registra hábito com a quantidade ou o passo padrão', () => {
+    expect(validarAcao('registrar_habito', '{"habito":"água","quantidade":0.5}', c2)).toMatchObject({ ok: true, acao: { quantidade: 0.5 } })
+    expect(validarAcao('registrar_habito', '{"habito":"água"}', c2)).toMatchObject({ ok: true, acao: { quantidade: 0.25 } })
+    expect(validarAcao('registrar_habito', '{"habito":"yoga"}', c2).ok).toBe(false)
+  })
+  it('volume limitado de 0 a 100 e ação de PC só da lista', () => {
+    expect(validarAcao('volume', '{"nivel":250}', c2)).toMatchObject({ acao: { mudanca: { nivel: 100 } } })
+    expect(validarAcao('volume', '{}', c2).ok).toBe(false)
+    expect(validarAcao('acao_pc', '{"acao":"desligar"}', c2)).toMatchObject({ acao: { tipo: 'pc', acao: 'desligar' } })
+    expect(validarAcao('acao_pc', '{"acao":"formatar"}', c2).ok).toBe(false)
+  })
 })

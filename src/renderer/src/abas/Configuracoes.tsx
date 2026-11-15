@@ -1,235 +1,193 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { aceleradorDaTecla, aceleradorLegivel } from '../../../shared/atalho'
-import type { Atualizacao, Configuracoes as Config, QualAtalho } from '../../../shared/tipos'
-import { Icone } from '../icones'
+import type { Atualizacao, Configuracoes as Config, Ok, QualAtalho } from '../../../shared/tipos'
 import { api } from '../util'
-import { BotaoApagar, Mensagem, Secao } from './comum'
+import { Apagar, Interruptor, Mensagem, Titulo } from './comum'
 
-type Aviso = { tipo: 'ok' | 'erro'; texto: string } | null
+type Mostrar = (r: Ok, ok: string) => void
+
+function Secao({ titulo, texto, children }: { titulo: string; texto: string; children: ReactNode }) {
+  return (
+    <section className="config-secao">
+      <div className="config-rotulo">
+        <strong>{titulo}</strong>
+        <span>{texto}</span>
+      </div>
+      <div className="config-painel">{children}</div>
+    </section>
+  )
+}
 
 export function Configuracoes({ config: c, chamado }: { config: Config; chamado: string }) {
-  const [aviso, setAviso] = useState<Aviso>(null)
-  const mostrar = (r: { ok: true } | { ok: false; erro: string }, ok: string) => setAviso(r.ok ? { tipo: 'ok', texto: ok } : { tipo: 'erro', texto: r.erro })
+  const [aviso, setAviso] = useState<{ texto: string; erro?: boolean } | null>(null)
+  const mostrar: Mostrar = (r, ok) => setAviso(r.ok ? { texto: ok } : { texto: r.erro, erro: true })
 
   return (
-    <div className="aba-conteudo config">
-      {aviso && <Mensagem tipo={aviso.tipo}>{aviso.texto}</Mensagem>}
+    <>
+      <Titulo titulo="Configurações" />
+      {aviso && <Mensagem erro={aviso.erro}>{aviso.texto}</Mensagem>}
+      <div className="rolagem">
+        <Secao titulo="Conta Google" texto="Agenda do dia, aviso antes das reuniões e eventos marcados falando.">
+          <Google c={c} mostrar={mostrar} />
+        </Secao>
 
-      <Secao titulo="Groq (inteligência e voz)">
-        <ChaveGroq tem={c.temChaveGroq} mostrar={mostrar} />
-        <CampoTexto rotulo="Modelo" valor={c.modelo} aoSalvar={(v) => api.mudarConfig({ modelo: v }).then(() => setAviso({ tipo: 'ok', texto: 'Modelo salvo.' }))} />
-      </Secao>
+        <Secao titulo="Onde fica o entalho" texto="Ou segure e arraste o entalho na tela: ele gruda na borda mais próxima.">
+          <div className="segmentos" role="radiogroup" aria-label="Borda" style={{ alignSelf: 'flex-start', background: 'var(--chao)', marginTop: 4 }}>
+            {(['topo', 'baixo', 'esquerda', 'direita'] as const).map((b) => (
+              <button key={b} type="button" role="radio" aria-checked={c.posicao.borda === b} className={c.posicao.borda === b ? 'ativo' : ''} onClick={() => api.definirPosicao({ borda: b, fracao: 0.5 })}>
+                {{ topo: 'Topo', baixo: 'Embaixo', esquerda: 'Esquerda', direita: 'Direita' }[b]}
+              </button>
+            ))}
+          </div>
+          <Interruptor ligado={c.entalhoSempreVisivel} aoMudar={(v) => api.mudarConfig({ entalhoSempreVisivel: v })}>
+            Sempre visível
+          </Interruptor>
+        </Secao>
 
-      <Secao titulo="Google Agenda">
-        <Google c={c} mostrar={mostrar} />
-      </Secao>
+        <Secao titulo="Atalhos de teclado" texto="Clique em Trocar e aperte a combinação que quiser.">
+          <GravarAtalho qual="atalhoAbrir" rotulo="Abrir e recolher" valor={c.atalhoAbrir} mostrar={mostrar} />
+          <GravarAtalho qual="atalhoFalar" rotulo="Falar" valor={c.atalhoFalar} mostrar={mostrar} />
+          <GravarAtalho qual="atalhoCopiados" rotulo="Copiados" valor={c.atalhoCopiados} mostrar={mostrar} />
+        </Secao>
 
-      <Secao titulo="Voz">
-        <Interruptor ligado={c.responderFalando} aoMudar={(v) => api.mudarConfig({ responderFalando: v })}>
-          Responder falando quando eu falar
-        </Interruptor>
-        <Interruptor ligado={c.chamadoPorVoz} desativado={!c.modeloVozDisponivel} aoMudar={(v) => api.mudarConfig({ chamadoPorVoz: v })}>
-          Chamar dizendo "Ei, Zarb"
-          <small>
-            {!c.modeloVozDisponivel
-              ? 'Reconhecedor offline não veio neste instalador.'
-              : !c.chamadoPorVoz
-                ? 'O microfone fica ligado, mas o som só é analisado no próprio PC.'
-                : chamado === 'escutando'
-                  ? 'Escutando. O "z" do entalho fica com um ponto azul.'
-                  : chamado === 'carregando'
-                    ? 'Carregando o reconhecedor…'
-                    : chamado === 'erro'
-                      ? 'Não consegui ligar o microfone ou o reconhecedor.'
-                      : ''}
-          </small>
-        </Interruptor>
-      </Secao>
+        <Secao titulo="Voz" texto='O "Ei, Zarb" ouve só no seu PC; nada sai antes do chamado.'>
+          <Interruptor ligado={c.responderFalando} aoMudar={(v) => api.mudarConfig({ responderFalando: v })}>
+            <span>Responder falando quando eu falar</span>
+            <small>Se ele perguntar algo, volta a ouvir sozinho</small>
+          </Interruptor>
+          <Interruptor ligado={c.chamadoPorVoz} desativado={!c.modeloVozDisponivel} aoMudar={(v) => api.mudarConfig({ chamadoPorVoz: v })}>
+            <span>Chamar dizendo "Ei, Zarb"</span>
+            <small>
+              {!c.modeloVozDisponivel
+                ? 'O reconhecedor offline não veio nesta versão.'
+                : !c.chamadoPorVoz
+                  ? 'Deixa o microfone ligado, com o som analisado só no PC.'
+                  : { escutando: 'Escutando. O "z." do entalho ganha um ponto azul.', carregando: 'Carregando o reconhecedor…', erro: 'Não consegui ligar o microfone ou o reconhecedor.' }[chamado] ?? ''}
+            </small>
+          </Interruptor>
+        </Secao>
 
-      <Secao titulo="Atalhos de teclado">
-        <GravarAtalho qual="atalhoAbrir" rotulo="Abrir e recolher" valor={c.atalhoAbrir} mostrar={mostrar} />
-        <GravarAtalho qual="atalhoFalar" rotulo="Falar" valor={c.atalhoFalar} mostrar={mostrar} />
-        <GravarAtalho qual="atalhoCopiados" rotulo="Copiados" valor={c.atalhoCopiados} mostrar={mostrar} />
-        <p className="discreto-texto">Use Ctrl, Alt ou Win com outra tecla, ou uma tecla F sozinha.</p>
-      </Secao>
+        <Secao titulo="Inteligência" texto="A Groq entende o que você fala e escreve. Plano grátis.">
+          <ChaveGroq tem={c.temChaveGroq} mostrar={mostrar} />
+          <CampoLinha rotulo="Modelo" valor={c.modelo} aoSalvar={(v) => api.mudarConfig({ modelo: v }).then(() => setAviso({ texto: 'Modelo salvo.' }))} />
+        </Secao>
 
-      <Secao titulo="Claude Code">
-        <PastasClaude c={c} mostrar={mostrar} />
-      </Secao>
+        <Secao titulo="Claude Code" texto="Os projetos onde você pede coisas ao Claude Code falando. Ele pede aprovação antes de mexer.">
+          <PastasClaude c={c} mostrar={mostrar} />
+        </Secao>
 
-      <Secao titulo="Versão">
-        <Versao config={c} />
-      </Secao>
+        <Secao titulo="Versão" texto="As versões novas chegam e se instalam sozinhas, só se a assinatura for a nossa.">
+          <Versao c={c} />
+        </Secao>
 
-      <Secao titulo="Geral">
-        <Interruptor ligado={c.entalhoSempreVisivel} aoMudar={(v) => api.mudarConfig({ entalhoSempreVisivel: v })}>
-          Entalho sempre visível no topo da tela
-        </Interruptor>
-        <Interruptor ligado={c.iniciarComWindows} aoMudar={(v) => api.definirIniciarComWindows(v)}>
-          Abrir junto com o Windows
-        </Interruptor>
-        <Interruptor ligado={c.copiasAtivas} aoMudar={(v) => api.mudarConfig({ copiasAtivas: v })}>
-          Guardar o histórico do que copio
-        </Interruptor>
-        <div className="botoes">
-          <button className="discreto" onClick={() => api.sair()}>
-            <Icone nome="sair" tamanho={16} /> Fechar o assistente
+        <Secao titulo="Geral" texto="">
+          <Interruptor ligado={c.iniciarComWindows} aoMudar={(v) => api.definirIniciarComWindows(v)}>
+            Abrir junto com o Windows
+          </Interruptor>
+          <Interruptor ligado={c.copiasAtivas} aoMudar={(v) => api.mudarConfig({ copiasAtivas: v })}>
+            Guardar o histórico do que copio
+          </Interruptor>
+          <Interruptor ligado={c.silenciarAvisos} aoMudar={(v) => api.mudarConfig({ silenciarAvisos: v })}>
+            Silenciar avisos do Windows
+          </Interruptor>
+          <div className="botoes" style={{ padding: '6px 0' }}>
+            <button type="button" className="botao leve" onClick={() => api.sair()}>
+              Fechar o assistente
+            </button>
+          </div>
+        </Secao>
+      </div>
+    </>
+  )
+}
+
+function Google({ c, mostrar }: { c: Config; mostrar: Mostrar }) {
+  const [entrando, setEntrando] = useState(false)
+  const [manual, setManual] = useState(false)
+  const [id, setId] = useState('')
+  const [segredo, setSegredo] = useState('')
+
+  if (c.google.conectado) {
+    return (
+      <>
+        <div className="linha">
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--verde)' }} />
+          <span style={{ flex: 1 }}>Conectado{c.google.email ? ` como ${c.google.email}` : ''}</span>
+          <button type="button" className="link" onClick={() => api.desconectarGoogle()}>
+            Sair
           </button>
         </div>
-      </Secao>
+        <label className="linha">
+          <span style={{ flex: 1 }}>Avisar antes da reunião</span>
+          <select className="selecao" value={c.avisoEventoMin} onChange={(e) => api.mudarConfig({ avisoEventoMin: Number(e.target.value) })}>
+            {[5, 10, 15, 30].map((m) => (
+              <option key={m} value={m}>
+                {m} min
+              </option>
+            ))}
+          </select>
+        </label>
+        <span className="meta">E de novo 1 minuto antes, com o botão Entrar no Meet.</span>
+        <Interruptor ligado={c.copiarLembretesParaAgenda} aoMudar={(v) => api.mudarConfig({ copiarLembretesParaAgenda: v })}>
+          <span>Copiar lembretes para o Agenda</span>
+          <small>Assim eles chegam também no celular, pelo app do Google</small>
+        </Interruptor>
+      </>
+    )
+  }
+
+  return (
+    <div className="formulario" style={{ padding: '6px 0' }}>
+      <div className="linha">
+        <button
+          type="button"
+          className="botao principal alto"
+          disabled={entrando || !c.google.temCliente}
+          onClick={async () => {
+            setEntrando(true)
+            mostrar(await api.conectarGoogle(), 'Agenda conectada.')
+            setEntrando(false)
+          }}
+        >
+          <span style={{ width: 20, height: 20, borderRadius: '50%', background: '#e8eaed', color: '#1f1f1f', fontSize: 13, fontWeight: 600, display: 'grid', placeItems: 'center' }}>G</span>
+          {entrando ? 'Esperando o login no navegador…' : 'Entrar com Google'}
+        </button>
+        <span className="meta" style={{ flex: 1 }}>
+          {c.google.temCliente ? 'Abre o navegador para você entrar com a conta da Zarb. Uma vez só.' : 'O login do Google ainda não veio configurado nesta versão.'}
+        </span>
+      </div>
+      {!c.google.temCliente && !manual && (
+        <button type="button" className="link" style={{ alignSelf: 'flex-start' }} onClick={() => setManual(true)}>
+          Configurar à mão
+        </button>
+      )}
+      {manual && (
+        <form
+          className="formulario"
+          onSubmit={async (e) => {
+            e.preventDefault()
+            const r = await api.definirClienteGoogle(id, segredo)
+            if (r.ok) setManual(false)
+            mostrar(r, 'Pronto. Agora clique em Entrar com Google.')
+          }}
+        >
+          <input className="campo-texto" value={id} onChange={(e) => setId(e.target.value)} placeholder="ID do cliente (…apps.googleusercontent.com)" aria-label="ID do cliente" />
+          <input className="campo-texto" type="password" value={segredo} onChange={(e) => setSegredo(e.target.value)} placeholder="Chave secreta do cliente" aria-label="Chave secreta" autoComplete="off" />
+          <div className="botoes">
+            <button type="submit" className="botao principal" disabled={!id.trim() || !segredo.trim()}>
+              Salvar
+            </button>
+            <button type="button" className="botao leve" onClick={() => setManual(false)}>
+              Cancelar
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   )
 }
 
-function Interruptor({ ligado, aoMudar, desativado, children }: { ligado: boolean; aoMudar: (v: boolean) => void; desativado?: boolean; children: ReactNode }) {
-  return (
-    <label className={`interruptor ${desativado ? 'desativado' : ''}`}>
-      <span className="interruptor-texto">{children}</span>
-      <input type="checkbox" role="switch" checked={ligado} disabled={desativado} onChange={(e) => aoMudar(e.target.checked)} />
-      <span className="trilho" aria-hidden="true" />
-    </label>
-  )
-}
-
-function CampoTexto({ rotulo, valor, aoSalvar }: { rotulo: string; valor: string; aoSalvar: (v: string) => void }) {
-  const [v, setV] = useState(valor)
-  useEffect(() => setV(valor), [valor])
-  return (
-    <form
-      className="campo"
-      onSubmit={(e) => {
-        e.preventDefault()
-        aoSalvar(v.trim())
-      }}
-    >
-      <span>{rotulo}</span>
-      <input value={v} onChange={(e) => setV(e.target.value)} aria-label={rotulo} />
-      <button type="submit" className="pequeno" disabled={!v.trim() || v.trim() === valor}>
-        Salvar
-      </button>
-    </form>
-  )
-}
-
-function ChaveGroq({ tem, mostrar }: { tem: boolean; mostrar: (r: { ok: true } | { ok: false; erro: string }, ok: string) => void }) {
-  const [chave, setChave] = useState('')
-  return (
-    <>
-      <p className="discreto-texto">
-        {tem ? 'Chave guardada no cofre do Windows.' : 'Crie uma chave grátis em console.groq.com (API Keys) e cole aqui.'}
-      </p>
-      <form
-        className="campo"
-        onSubmit={async (e) => {
-          e.preventDefault()
-          const r = await api.definirChaveGroq(chave)
-          if (r.ok) setChave('')
-          mostrar(r, 'Chave guardada no cofre do Windows.')
-        }}
-      >
-        <span>Chave</span>
-        <input type="password" value={chave} onChange={(e) => setChave(e.target.value)} placeholder={tem ? 'Colar chave nova' : 'gsk_…'} aria-label="Chave da Groq" autoComplete="off" />
-        <button type="submit" className="primario pequeno" disabled={!chave.trim()}>
-          Salvar
-        </button>
-        {tem && <BotaoApagar rotulo="Apagar a chave" aoConfirmar={() => api.apagarChaveGroq()} />}
-      </form>
-    </>
-  )
-}
-
-function Google({ c, mostrar }: { c: Config; mostrar: (r: { ok: true } | { ok: false; erro: string }, ok: string) => void }) {
-  const [id, setId] = useState('')
-  const [segredo, setSegredo] = useState('')
-  const [conectando, setConectando] = useState(false)
-  const [trocar, setTrocar] = useState(false)
-
-  if (!c.google.temCliente || trocar) {
-    return (
-      <form
-        className="formulario"
-        onSubmit={async (e) => {
-          e.preventDefault()
-          const r = await api.definirClienteGoogle(id, segredo)
-          if (r.ok) {
-            setId('')
-            setSegredo('')
-            setTrocar(false)
-          }
-          mostrar(r, 'Cliente do Google salvo. Agora clique em Conectar.')
-        }}
-      >
-        <p className="discreto-texto">
-          Uma vez só: no Google Cloud da Zarb, crie um "ID do cliente OAuth" do tipo App para computador e cole o ID e a chave secreta aqui. O passo a passo está no LEIA-ME do projeto.
-        </p>
-        <input value={id} onChange={(e) => setId(e.target.value)} placeholder="ID do cliente (…apps.googleusercontent.com)" aria-label="ID do cliente" />
-        <input type="password" value={segredo} onChange={(e) => setSegredo(e.target.value)} placeholder="Chave secreta do cliente" aria-label="Chave secreta" autoComplete="off" />
-        <div className="botoes">
-          <button type="submit" className="primario" disabled={!id.trim() || !segredo.trim()}>
-            Salvar
-          </button>
-          {trocar && (
-            <button type="button" className="discreto" onClick={() => setTrocar(false)}>
-              Cancelar
-            </button>
-          )}
-        </div>
-      </form>
-    )
-  }
-
-  if (!c.google.conectado) {
-    return (
-      <div className="formulario">
-        <p className="discreto-texto">O navegador vai abrir para você entrar com a conta da Zarb e liberar a agenda.</p>
-        <div className="botoes">
-          <button
-            className="primario"
-            disabled={conectando}
-            onClick={async () => {
-              setConectando(true)
-              mostrar(await api.conectarGoogle(), 'Agenda conectada.')
-              setConectando(false)
-            }}
-          >
-            {conectando ? 'Esperando o login no navegador…' : 'Conectar o Google Agenda'}
-          </button>
-          <button className="discreto" onClick={() => setTrocar(true)}>
-            Trocar cliente
-          </button>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <>
-      <div className="conectado">
-        <span className="ponto-ok" />
-        <span>Conectado{c.google.email ? ` como ${c.google.email}` : ''}</span>
-        <button className="discreto pequeno" onClick={() => api.desconectarGoogle()}>
-          Desconectar
-        </button>
-      </div>
-      <label className="campo">
-        <span>Avisar antes</span>
-        <select value={c.avisoEventoMin} onChange={(e) => api.mudarConfig({ avisoEventoMin: Number(e.target.value) })} aria-label="Avisar antes da reunião">
-          {[0, 1, 5, 10, 15, 30].map((m) => (
-            <option key={m} value={m}>
-              {m === 0 ? 'Na hora' : `${m} min`}
-            </option>
-          ))}
-        </select>
-      </label>
-      <Interruptor ligado={c.copiarLembretesParaAgenda} aoMudar={(v) => api.mudarConfig({ copiarLembretesParaAgenda: v })}>
-        Copiar lembretes para o Agenda
-        <small>Assim eles chegam também no celular, pelo app do Google.</small>
-      </Interruptor>
-    </>
-  )
-}
-
-function GravarAtalho({ qual, rotulo, valor, mostrar }: { qual: QualAtalho; rotulo: string; valor: string; mostrar: (r: { ok: true } | { ok: false; erro: string }, ok: string) => void }) {
+function GravarAtalho({ qual, rotulo, valor, mostrar }: { qual: QualAtalho; rotulo: string; valor: string; mostrar: Mostrar }) {
   const [gravando, setGravando] = useState(false)
   useEffect(() => {
     if (!gravando) return
@@ -257,44 +215,73 @@ function GravarAtalho({ qual, rotulo, valor, mostrar }: { qual: QualAtalho; rotu
     }
   }, [gravando])
   return (
-    <div className="campo">
-      <span>{rotulo}</span>
+    <div className="linha">
+      <span style={{ flex: 1 }}>{rotulo}</span>
       <kbd className={gravando ? 'gravando' : ''}>{gravando ? 'Aperte a combinação… (Esc cancela)' : aceleradorLegivel(valor)}</kbd>
-      <button className="pequeno" onClick={() => setGravando(true)} disabled={gravando}>
+      <button type="button" className="link" onClick={() => setGravando(true)} disabled={gravando}>
         Trocar
       </button>
     </div>
   )
 }
 
-function PastasClaude({ c, mostrar }: { c: Config; mostrar: (r: { ok: true } | { ok: false; erro: string }, ok: string) => void }) {
+function ChaveGroq({ tem, mostrar }: { tem: boolean; mostrar: Mostrar }) {
+  const [chave, setChave] = useState('')
+  return (
+    <form
+      className="linha"
+      onSubmit={async (e) => {
+        e.preventDefault()
+        const r = await api.definirChaveGroq(chave)
+        if (r.ok) setChave('')
+        mostrar(r, 'Chave guardada no cofre do Windows.')
+      }}
+    >
+      <span style={{ width: 70 }}>Chave</span>
+      <input className="campo-texto" style={{ flex: 1 }} type="password" value={chave} onChange={(e) => setChave(e.target.value)} placeholder={tem ? 'Guardada no cofre. Cole outra para trocar.' : 'Crie grátis em console.groq.com e cole aqui'} aria-label="Chave da Groq" autoComplete="off" />
+      <button type="submit" className="botao principal pequeno" disabled={!chave.trim()}>
+        Salvar
+      </button>
+      {tem && <Apagar rotulo="Apagar a chave" aoConfirmar={() => api.apagarChaveGroq()} />}
+    </form>
+  )
+}
+
+function CampoLinha({ rotulo, valor, aoSalvar }: { rotulo: string; valor: string; aoSalvar: (v: string) => void }) {
+  const [v, setV] = useState(valor)
+  useEffect(() => setV(valor), [valor])
+  return (
+    <form
+      className="linha"
+      onSubmit={(e) => {
+        e.preventDefault()
+        aoSalvar(v.trim())
+      }}
+    >
+      <span style={{ width: 70 }}>{rotulo}</span>
+      <input className="campo-texto" style={{ flex: 1 }} value={v} onChange={(e) => setV(e.target.value)} aria-label={rotulo} />
+      <button type="submit" className="botao pequeno" disabled={!v.trim() || v.trim() === valor}>
+        Salvar
+      </button>
+    </form>
+  )
+}
+
+function PastasClaude({ c, mostrar }: { c: Config; mostrar: Mostrar }) {
   const [nome, setNome] = useState('')
   const [caminho, setCaminho] = useState('')
   return (
     <>
-      <p className="discreto-texto">
-        Os projetos onde você pede coisas ao Claude Code falando. Ele abre numa janela do terminal e continua pedindo sua aprovação antes de editar ou rodar algo.
-      </p>
-      {c.pastasClaude.length > 0 && (
-        <ul className="lista">
-          {c.pastasClaude.map((p) => (
-            <li key={p.id} className="linha">
-              <span className="atalho-icone programa">
-                <Icone nome="terminal" tamanho={16} />
-              </span>
-              <div className="linha-texto">
-                <strong>{p.nome}</strong>
-                <span>{p.caminho}</span>
-              </div>
-              <div className="linha-acoes">
-                <BotaoApagar aoConfirmar={() => api.apagarPastaClaude(p.id)} />
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
+      {c.pastasClaude.map((p) => (
+        <div key={p.id} className="linha">
+          <span className="principal-texto">
+            {p.nome} <span className="meta">{p.caminho}</span>
+          </span>
+          <Apagar aoConfirmar={() => api.apagarPastaClaude(p.id)} />
+        </div>
+      ))}
       <form
-        className="campo"
+        className="linha"
         onSubmit={async (e) => {
           e.preventDefault()
           const r = await api.salvarPastaClaude(nome, caminho)
@@ -302,13 +289,13 @@ function PastasClaude({ c, mostrar }: { c: Config; mostrar: (r: { ok: true } | {
             setNome('')
             setCaminho('')
           }
-          mostrar(r, 'Pasta salva.')
+          mostrar(r, 'Projeto salvo.')
         }}
       >
-        <input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome (ex.: zarb-os)" aria-label="Nome do projeto" />
+        <input className="campo-texto" style={{ flex: 1 }} value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome, ex.: zarb-os" aria-label="Nome do projeto" />
         <button
           type="button"
-          className="pequeno"
+          className="botao pequeno"
           onClick={async () => {
             const p = await api.escolherPasta()
             if (p) {
@@ -319,7 +306,7 @@ function PastasClaude({ c, mostrar }: { c: Config; mostrar: (r: { ok: true } | {
         >
           {caminho ? caminho.split('\\').pop() : 'Escolher pasta…'}
         </button>
-        <button type="submit" className="primario pequeno" disabled={!nome.trim() || !caminho}>
+        <button type="submit" className="botao principal pequeno" disabled={!nome.trim() || !caminho}>
           Adicionar
         </button>
       </form>
@@ -327,29 +314,31 @@ function PastasClaude({ c, mostrar }: { c: Config; mostrar: (r: { ok: true } | {
   )
 }
 
-function Versao({ config }: { config: Config }) {
+function Versao({ c }: { c: Config }) {
   const [a, setA] = useState<Atualizacao | null>(null)
   useEffect(() => {
     api.atualizacao().then(setA)
-  }, [config])
+  }, [c])
   if (!a) return null
   const hora = (iso: string) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
   const texto =
     a.tipo === 'em-dia'
-      ? `Em dia${a.conferidoEm ? ` (conferido às ${hora(a.conferidoEm)})` : ''}. As versões novas chegam sozinhas.`
+      ? `Em dia${a.conferidoEm ? ` (conferido às ${hora(a.conferidoEm)})` : ''}.`
       : a.tipo === 'baixando'
         ? `Baixando a versão ${a.versao} (${a.porcento}%).`
         : a.tipo === 'pronta'
-          ? `Versão ${a.versao} pronta. Instala sozinha quando o painel fechar.`
+          ? `Versão ${a.versao} pronta. Instala quando o painel fechar.`
           : a.tipo === 'recusada'
             ? `Versão ${a.versao} recusada: ${a.motivo}`
             : a.tipo === 'erro'
               ? a.motivo
               : `Atualização automática desligada: ${a.motivo}`
   return (
-    <div className="campo">
-      <span>Versão {a.versao_atual}</span>
-      <span className={a.tipo === 'recusada' || a.tipo === 'erro' ? 'texto-erro' : 'discreto-texto'}>{texto}</span>
+    <div className="linha">
+      <span style={{ width: 110 }}>Versão {a.versao_atual}</span>
+      <span className={a.tipo === 'recusada' || a.tipo === 'erro' ? 'erro-texto' : 'meta'} style={{ flex: 1 }}>
+        {texto}
+      </span>
     </div>
   )
 }

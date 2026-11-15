@@ -1,55 +1,92 @@
 import { useState, type ReactNode } from 'react'
 import { Icone, type NomeIcone } from '../icones'
 
+export function Titulo({ titulo, sub, children }: { titulo: string; sub?: ReactNode; children?: ReactNode }) {
+  return (
+    <div className="titulo-linha">
+      <div className="titulo-bloco">
+        <h1>{titulo}</h1>
+        {sub && <p>{sub}</p>}
+      </div>
+      {children}
+    </div>
+  )
+}
+
 export function Vazio({ icone, titulo, children }: { icone: NomeIcone; titulo: string; children?: ReactNode }) {
   return (
     <div className="vazio">
-      <span className="vazio-icone">
-        <Icone nome={icone} tamanho={22} />
-      </span>
+      <Icone nome={icone} tamanho={22} />
       <strong>{titulo}</strong>
       {children && <p>{children}</p>}
     </div>
   )
 }
 
-export function Secao({ titulo, acao, children }: { titulo: string; acao?: ReactNode; children: ReactNode }) {
+export function Interruptor({ ligado, aoMudar, desativado, children }: { ligado: boolean; aoMudar: (v: boolean) => void; desativado?: boolean; children: ReactNode }) {
   return (
-    <section className="secao">
-      <div className="secao-topo">
-        <h2>{titulo}</h2>
-        {acao}
-      </div>
-      {children}
-    </section>
+    <label className={`interruptor ${desativado ? 'desligado-geral' : ''}`}>
+      <span className="rotulo">{children}</span>
+      <input type="checkbox" role="switch" checked={ligado} disabled={desativado} onChange={(e) => aoMudar(e.target.checked)} />
+      <span className="trilho" aria-hidden="true" />
+    </label>
   )
 }
 
-// Botão de apagar que pede confirmação no próprio botão (clique duplo intencional).
-export function BotaoApagar({ aoConfirmar, rotulo = 'Apagar' }: { aoConfirmar: () => void; rotulo?: string }) {
-  const [confirmando, setConfirmando] = useState(false)
-  if (confirmando) {
+// Botão que pede confirmação antes de agir: primeiro clique mostra a pergunta, o segundo faz.
+export function ComConfirmacao({ rotulo, pergunta, confirmar, aoConfirmar, pequeno = true, perigo = true }: { rotulo: ReactNode; pergunta?: string; confirmar: string; aoConfirmar: () => void; pequeno?: boolean; perigo?: boolean }) {
+  const [aberto, setAberto] = useState(false)
+  if (!aberto) {
     return (
-      <span className="confirmar">
-        <button className="perigo" onClick={aoConfirmar}>
-          Confirmar
+      <button type="button" className={`botao ${pequeno ? 'pequeno' : ''}`} onClick={() => setAberto(true)}>
+        {rotulo}
+      </button>
+    )
+  }
+  return (
+    <span className="botoes" role="alertdialog" aria-label={pergunta ?? confirmar}>
+      {pergunta && <span className="meta">{pergunta}</span>}
+      <button
+        type="button"
+        className={`botao ${pequeno ? 'pequeno' : ''} ${perigo ? 'perigo' : 'principal'}`}
+        onClick={() => {
+          setAberto(false)
+          aoConfirmar()
+        }}
+      >
+        {confirmar}
+      </button>
+      <button type="button" className={`botao leve ${pequeno ? 'pequeno' : ''}`} onClick={() => setAberto(false)}>
+        Cancelar
+      </button>
+    </span>
+  )
+}
+
+export function Apagar({ aoConfirmar, rotulo = 'Apagar' }: { aoConfirmar: () => void; rotulo?: string }) {
+  const [aberto, setAberto] = useState(false)
+  if (aberto) {
+    return (
+      <span className="botoes">
+        <button type="button" className="botao pequeno perigo" onClick={aoConfirmar}>
+          Apagar
         </button>
-        <button className="discreto" onClick={() => setConfirmando(false)}>
+        <button type="button" className="botao pequeno leve" onClick={() => setAberto(false)}>
           Cancelar
         </button>
       </span>
     )
   }
   return (
-    <button className="icone-botao pequeno" onClick={() => setConfirmando(true)} aria-label={rotulo} title={rotulo}>
+    <button type="button" className="icone" onClick={() => setAberto(true)} aria-label={rotulo} title={rotulo}>
       <Icone nome="lixo" tamanho={16} />
     </button>
   )
 }
 
-export function Mensagem({ tipo, children }: { tipo: 'ok' | 'erro'; children: ReactNode }) {
+export function Mensagem({ erro, children }: { erro?: boolean; children: ReactNode }) {
   return (
-    <p className={`mensagem-${tipo}`} role={tipo === 'erro' ? 'alert' : 'status'}>
+    <p className={`mensagem ${erro ? 'erro' : ''}`} role={erro ? 'alert' : 'status'}>
       {children}
     </p>
   )

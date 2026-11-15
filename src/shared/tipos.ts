@@ -1,4 +1,9 @@
 // Tipos que passam entre a tela (renderer) e o processo principal.
+import type { AcaoPc, MudancaVolume } from './acoes'
+import type { Habito } from './habitos'
+import type { Posicao } from './posicao'
+
+export type { Habito, Posicao, AcaoPc, MudancaVolume }
 
 export type Repetir = 'diario' | 'dias_uteis' | 'semanal' | 'mensal' | null
 
@@ -27,7 +32,7 @@ export type Evento = {
 export type Copia = { id: string; texto: string; em: string; fixada: boolean }
 
 export type TipoAtalho = 'site' | 'pasta' | 'programa'
-export type Atalho = { id: string; nome: string; destino: string; tipo: TipoAtalho }
+export type Atalho = { id: string; nome: string; destino: string; tipo: TipoAtalho; proprio?: boolean }
 
 export type PastaClaude = { id: string; nome: string; caminho: string }
 
@@ -47,6 +52,8 @@ export type Configuracoes = {
   copiarLembretesParaAgenda: boolean
   pastasClaude: PastaClaude[]
   modeloVozDisponivel: boolean
+  posicao: Posicao
+  silenciarAvisos: boolean
 }
 
 export type MudancaConfig = Partial<
@@ -59,6 +66,7 @@ export type MudancaConfig = Partial<
     | 'copiasAtivas'
     | 'avisoEventoMin'
     | 'copiarLembretesParaAgenda'
+    | 'silenciarAvisos'
   >
 >
 
@@ -74,6 +82,9 @@ export type Cartao =
   | { tipo: 'ensinar'; nome: string; destino: string }
   | { tipo: 'aberto'; atalho: Atalho }
   | { tipo: 'concluida'; tarefa: Tarefa }
+  | { tipo: 'habito'; habito: Habito; antes: number }
+  | { tipo: 'volume'; volume: number | null; mudo: boolean | null }
+  | { tipo: 'pc'; acao: AcaoPc } // suspender, reiniciar, desligar: só com o clique
 
 export type RascunhoEvento = {
   titulo: string
@@ -83,13 +94,15 @@ export type RascunhoEvento = {
   comMeet: boolean
 }
 
-export type Resposta = { texto: string; cartoes: Cartao[]; erro?: boolean; aba?: Aba }
+// rapida: dá para mostrar só no entalho, sem abrir o painel (lembrete criado, hábito marcado, volume).
+// pergunta: a IA pediu uma informação; com voz, o assistente volta a ouvir.
+export type Resposta = { texto: string; cartoes: Cartao[]; erro?: boolean; aba?: Aba; rapida?: boolean; pergunta?: boolean }
 
 export type Ok = { ok: true } | { ok: false; erro: string }
 
 export type Mensagem = { papel: 'eu' | 'assistente'; texto: string }
 
-export type Mudou = 'tarefas' | 'eventos' | 'copias' | 'atalhos' | 'config'
+export type Mudou = 'tarefas' | 'eventos' | 'copias' | 'atalhos' | 'config' | 'habitos'
 
 export type ApiAssistente = {
   // estado
@@ -138,6 +151,18 @@ export type ApiAssistente = {
   definirIniciarComWindows(ligar: boolean): Promise<void>
   modeloVoz(): Promise<Uint8Array | null>
   atualizacao(): Promise<Atualizacao>
+  // hábitos
+  habitos(): Promise<Habito[]>
+  salvarHabito(h: NovoHabito, id?: string): Promise<Ok>
+  apagarHabito(id: string): Promise<void>
+  registrarHabito(id: string, delta: number): Promise<void>
+  // PC
+  pcEstado(): Promise<EstadoPc>
+  pc(acao: PedidoPc): Promise<Ok & { texto?: string }>
+  // entalho
+  arrastar(fase: 'inicio' | 'fim'): Promise<void>
+  definirPosicao(p: Posicao): Promise<void>
+  aoPosicao(cb: (p: { borda: Posicao['borda']; deslocamento: number; arrastando: boolean }) => void): () => void
   // janela
   expandido(sim: boolean): Promise<void>
   mouseSobre(sim: boolean): Promise<void>
@@ -154,11 +179,12 @@ export type ComandoJanela =
   | { tipo: 'falar' }
   | { tipo: 'aviso'; aviso: Aviso }
 
-export type Aba = 'hoje' | 'tarefas' | 'agenda' | 'copiados' | 'atalhos' | 'config'
+export type Aba = 'hoje' | 'tarefas' | 'habitos' | 'agenda' | 'copiados' | 'atalhos' | 'pc' | 'config'
 
 export type Aviso =
   | { tipo: 'lembrete'; tarefa: Tarefa; atrasado: boolean }
-  | { tipo: 'evento'; evento: Evento; minutos: number }
+  | { tipo: 'evento'; evento: Evento; minutos: number; marco: number }
+  | { tipo: 'habito'; habito: Habito }
 
 export type EstadoAtualizacao =
   | { tipo: 'desligada'; motivo: string }
@@ -169,3 +195,29 @@ export type EstadoAtualizacao =
   | { tipo: 'erro'; motivo: string }
 
 export type Atualizacao = EstadoAtualizacao & { versao_atual: string }
+
+export type NovoHabito = Pick<Habito, 'nome' | 'dias' | 'meta' | 'lembrete'>
+
+export type EstadoPc = {
+  windows: boolean
+  volume: number | null
+  mudo: boolean | null
+  brilho: number | null
+  lixeira: { itens: number; bytes: number } | null
+  temporarios: number | null
+  travados: { pid: number; nome: string; titulo: string }[]
+  abertos: string[]
+  downloads: { nome: string; bytes: number; em: string }[]
+  areaDeTrabalho: { soltos: number; grupos: { pasta: string; arquivos: string[] }[] }
+}
+
+export type PedidoPc =
+  | { tipo: 'volume'; mudanca: MudancaVolume }
+  | { tipo: 'brilho'; nivel: number }
+  | { tipo: 'energia'; acao: AcaoPc; confirmado: boolean }
+  | { tipo: 'esvaziarLixeira'; confirmado: boolean }
+  | { tipo: 'limparTemporarios'; confirmado: boolean }
+  | { tipo: 'fecharPrograma'; pid: number; confirmado: boolean }
+  | { tipo: 'organizarAreaDeTrabalho'; confirmado: boolean }
+  | { tipo: 'mostrarDownload'; nome: string }
+  | { tipo: 'abrirDownloads' }

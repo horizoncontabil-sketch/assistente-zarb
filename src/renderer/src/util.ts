@@ -29,13 +29,25 @@ export function emQuanto(min: number): string {
   return m ? `em ${h}h${dois(m)}` : `em ${h}h`
 }
 
-export function falar(texto: string) {
-  if (!('speechSynthesis' in window) || !texto) return
+// Fala com a voz do Windows (pt-BR). "aoTerminar" roda quando a fala acaba (para voltar a ouvir).
+export function falar(texto: string, aoTerminar?: () => void) {
+  if (!('speechSynthesis' in window) || !texto) return aoTerminar?.()
   speechSynthesis.cancel()
-  const u = new SpeechSynthesisUtterance(texto)
+  const u = new SpeechSynthesisUtterance(texto.replace(/[*_#`]/g, ''))
   u.lang = 'pt-BR'
-  const voz = speechSynthesis.getVoices().find((v) => v.lang.toLowerCase().startsWith('pt-br'))
-  if (voz) u.voice = voz
-  u.rate = 1.05
+  const vozes = speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().startsWith('pt-br'))
+  // Preferência pelas vozes naturais do Windows quando existem (ex.: "Francisca Online (Natural)").
+  u.voice = vozes.find((v) => /natural/i.test(v.name)) ?? vozes[0] ?? null
+  u.rate = 1.08
+  if (aoTerminar) {
+    u.onend = () => aoTerminar()
+    u.onerror = () => aoTerminar()
+  }
   speechSynthesis.speak(u)
 }
+
+export function calar() {
+  if ('speechSynthesis' in window) speechSynthesis.cancel()
+}
+
+export const falando = () => 'speechSynthesis' in window && speechSynthesis.speaking

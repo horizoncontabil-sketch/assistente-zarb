@@ -72,12 +72,22 @@ export function corpoNovoEvento(r: RascunhoEvento, idPedido: string) {
   }
 }
 
-// Evento que começa daqui a até `antes` minutos e ainda não foi avisado.
-export function eventosParaAvisar(eventos: Evento[], agora: Date, antes: number, avisados: Set<string>) {
-  return eventos
-    .filter((e) => !e.diaInteiro)
-    .map((e) => ({ e, chave: `${e.id}@${e.inicio}`, min: Math.round((new Date(e.inicio).getTime() - agora.getTime()) / 60_000) }))
-    .filter(({ chave, min }) => !avisados.has(chave) && min >= 0 && min <= antes)
+// Avisos de reunião em marcos (ex.: 10 min antes e 1 min antes). Cada marco avisa uma vez;
+// se o PC ligou já perto da hora, avisa só o marco mais próximo e dá os outros por avisados.
+export function eventosParaAvisar(eventos: Evento[], agora: Date, marcos: number[], avisados: Set<string>) {
+  const saida: { e: Evento; min: number; marco: number; chaves: string[] }[] = []
+  for (const e of eventos) {
+    if (e.diaInteiro) continue
+    const min = Math.round((new Date(e.inicio).getTime() - agora.getTime()) / 60_000)
+    if (min < 0) continue
+    const atingidos = marcos.filter((m) => min <= m)
+    if (!atingidos.length) continue
+    const marco = Math.min(...atingidos)
+    const chave = `${e.id}@${e.inicio}@${marco}`
+    if (avisados.has(chave)) continue
+    saida.push({ e, min, marco, chaves: atingidos.map((m) => `${e.id}@${e.inicio}@${m}`) })
+  }
+  return saida
 }
 
 // Ordena e separa o que é do dia (inclusive dia inteiro).

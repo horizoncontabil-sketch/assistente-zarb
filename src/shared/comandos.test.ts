@@ -31,3 +31,10 @@ it('pedido com mais coisa vai para a IA', () => {
   expect(comandoDireto('me lembra às 15h de ligar pro cliente', atalhos)).toBeNull()
   expect(comandoDireto('o que tenho hoje depois das 15h', atalhos)).toBeNull()
 })
+
+it('volume e bloquear sem gastar IA', () => {
+  expect(comandoDireto('abaixa o volume', atalhos)).toEqual({ tipo: 'volume', mudanca: { mudar: -10 } })
+  expect(comandoDireto('volume em 30', atalhos)).toEqual({ tipo: 'volume', mudanca: { nivel: 30 } })
+  expect(comandoDireto('bloqueia o PC', atalhos)).toEqual({ tipo: 'bloquear' })
+  expect(comandoDireto('hábitos', atalhos)).toEqual({ tipo: 'aba', aba: 'habitos' })
+})

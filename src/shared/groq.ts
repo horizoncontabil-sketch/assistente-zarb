@@ -11,7 +11,7 @@ export const MODELO_AUDIO = 'whisper-large-v3-turbo'
 // Manda só as últimas mensagens: conversa longa gasta o limite grátis à toa.
 export const LIMITE_HISTORICO = 10
 
-export function instrucao(agora: Date, atalhos: string[], pastas: string[]): string {
+export function instrucao(agora: Date, atalhos: string[], pastas: string[], habitos: string[] = []): string {
   return [
     'Você é o assistente de mesa do Paulo, Customer Success da Zarb Media (assessoria de marketing e vendas para festas e eventos).',
     `Agora é ${diaDaSemana(agora)}, ${isoLocal(agora)}.`,
@@ -21,6 +21,9 @@ export function instrucao(agora: Date, atalhos: string[], pastas: string[]): str
     'Horários: converta "amanhã às 9", "daqui a 2 horas", "segunda de manhã" (9h), "à tarde" (14h), "à noite" (19h) para ISO com o fuso de agora. Se faltar informação essencial, pergunte em uma frase.',
     `Atalhos cadastrados: ${atalhos.length ? atalhos.join(', ') : 'nenhum'}.`,
     `Pastas do Claude Code: ${pastas.length ? pastas.join(', ') : 'nenhuma'}.`,
+    `Hábitos do Paulo: ${habitos.length ? habitos.join(', ') : 'nenhum'}. Quando ele contar que fez algo de um hábito, use registrar_habito.`,
+    'Você também controla o volume do PC e pode bloquear, suspender, reiniciar ou desligar (os três últimos o Paulo confirma na tela).',
+    'Respostas faladas: no máximo duas frases curtas, sem listas, sem markdown.',
     'Você não tem acesso à internet, a arquivos nem ao Zarb OS. Se pedirem, diga o que não alcança.',
   ].join('\n')
 }

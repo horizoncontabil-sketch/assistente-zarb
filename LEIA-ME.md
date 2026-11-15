@@ -8,12 +8,17 @@ Só Windows, só o PC do Paulo. Escopo completo no segundo cérebro (`_knowledge
 
 | Função | Como usar |
 |---|---|
-| **Lembretes e tarefas** | "Me lembra amanhã às 9 de ligar pra Costare", "cria uma tarefa: revisar o deck", "toda segunda às 8 me lembra do check-in", "timer de 10 minutos". Na hora, o entalho mostra o aviso com **Feito**, **10 min**, **1 hora** e **Amanhã**, e o Windows avisa também. Se o PC estava desligado, os perdidos aparecem quando ele liga. |
-| **Google Agenda** | "O que tenho hoje?" mostra reuniões e lembretes juntos. Aviso antes de cada reunião com o botão **Entrar no Meet**. "Marca uma reunião amanhã às 14h com a Costare" monta um cartão; o evento só é criado quando você clica em **Criar**. |
-| **Abrir as coisas da Zarb** | "Abre o Health Score", "abre o Monday". Já vem com Zarb OS e suas telas, Monday, Meta, Drive, Agenda, Gmail, WhatsApp, Vercel, Supabase, Fly e Claude. Na aba Atalhos você cria os seus (site, pasta ou programa), ou fala: "quando eu disser painel da Bianca, abre tal link". |
-| **Histórico do que copia** | Tudo que você copia (Ctrl+C) fica 30 dias na aba Copiados, com busca. Clique para copiar de novo, fixe o que não pode sumir. `Ctrl+Shift+V` abre direto. Senha copiada de gerenciador de senha não entra. Dá para pausar e apagar. |
-| **Claude Code por voz** | "Pede pro Claude Code ajustar a coluna Aviso no zarb-os". Aparece o pedido para você revisar e escolher o projeto; ao clicar em **Mandar**, abre o terminal com o Claude Code, que continua pedindo aprovação antes de mexer em algo. |
-| **Voz** | `Ctrl+Shift+Espaço` começa a ouvir; para sozinho quando você para de falar. Com "Responder falando" ligado, ele responde em voz quando você falou. "Ei, Zarb" (desligado por padrão) chama sem apertar nada. |
+| **Entalho** | Fica no topo, com a hora e o próximo compromisso. Segure e arraste para outra borda (embaixo, esquerda, direita): ele gruda onde soltar. Clique para abrir o painel. |
+| **Hoje** | O dia numa linha (reuniões, lembretes e agora), o que vem a seguir e os hábitos do dia. |
+| **Lembretes e tarefas** | "Me lembra amanhã às 9 de ligar pra Costare", "cria uma tarefa: revisar o deck". Aviso na hora com Feito, 10 min, 1 hora e Amanhã. |
+| **Hábitos** | De sim ou não, ou com quantidade (2 L de água, 30 min, 10 páginas). Visão do dia e da semana, sequência de dias, lembrete por horário ou a cada tantas horas. Fale "bebi 500 ml de água" ou "li 3 páginas". |
+| **Google Agenda** | Entre com o Google em Configurações. Aviso 10 min antes (um toque) e 1 min antes com o botão Entrar no Meet. "Marca reunião quinta às 14h com a Tia Nena" monta o evento; ele só é criado no clique. |
+| **Copiados** | O que você copia fica 30 dias, com busca e fixar. Senhas de gerenciador não entram. `Ctrl+Shift+V` abre. |
+| **Atalhos** | Telas do Zarb OS, ferramentas e os seus. "Abre o Health Score". |
+| **PC** | Volume, brilho (tela de notebook), silenciar avisos, bloquear, suspender, reiniciar, desligar, lixeira, temporários, programa travado, downloads e organizar a área de trabalho. O que apaga ou desliga pede confirmação. Fale "abaixa o volume", "bloqueia o PC". |
+| **Claude Code por voz** | "Pede pro Claude ajustar…": o pedido aparece para revisar e abre o terminal visível, que pede aprovação antes de mexer. |
+| **Voz** | `Ctrl+Shift+Espaço` ouve e para sozinho no silêncio. Resposta simples aparece só no entalho e é falada; se ele perguntar algo, volta a ouvir sozinho. "Ei, Zarb" opcional. |
+| **Atualização** | Chega e instala sozinha quando o painel está fechado, só se a assinatura for a nossa. |
 
 Atalhos de teclado padrão (troque em Configurações): `Ctrl+Espaço` abre e recolhe, `Ctrl+Shift+Espaço` fala, `Ctrl+Shift+V` abre os copiados. `Esc` recolhe.
 
@@ -32,7 +37,7 @@ Feito no Google Cloud da Zarb, logado com a conta `@zarbmedia.com.br` que admini
 3. **Google Auth Platform** (ou "Tela de permissão OAuth"): o público deve ser **Interno**. Assim só contas da Zarb entram e o login não vence a cada 7 dias.
 4. **Clientes** (ou "Credenciais → Criar credenciais → ID do cliente OAuth"): tipo **App para computador**, nome "Assistente Zarb", **Criar**.
 5. Copie o **ID do cliente** e a **Chave secreta do cliente**.
-6. No assistente: **Configurações → Google Agenda**, cole os dois, **Salvar**, depois **Conectar o Google Agenda**. O navegador abre; entre com a sua conta da Zarb e libere a agenda.
+6. No GitHub do repositório: **Settings → Secrets and variables → Actions**, crie `GOOGLE_CLIENT_ID` (o ID) e `GOOGLE_CLIENT_SECRET` (a chave). A próxima versão já vem com o botão **Entrar com Google** funcionando; ninguém precisa colar nada no app.
 
 O assistente só pede acesso a eventos da agenda principal. Para tirar o acesso: **Desconectar** nas configurações (e, se quiser, em myaccount.google.com → Segurança → Apps de terceiros).
 

@@ -94,11 +94,19 @@ describe('Google Agenda', () => {
     ]
     expect(eventosDoDia(lista, agora).map((e) => e.id)).toEqual(['feriado', 'tarde'])
   })
-  it('avisa X minutos antes, uma vez', () => {
+  it('avisa 10 min antes e de novo 1 min antes, cada um uma vez', () => {
     const e = { id: 'e', titulo: 'x', inicio: isoLocal(new Date(2026, 10, 15, 10, 8)), fim: '', diaInteiro: false, local: null, meet: null, link: null }
-    expect(eventosParaAvisar([e], agora, 10, new Set())).toHaveLength(1)
-    expect(eventosParaAvisar([e], agora, 5, new Set())).toHaveLength(0)
-    expect(eventosParaAvisar([e], agora, 10, new Set([`e@${e.inicio}`]))).toHaveLength(0)
+    const r = eventosParaAvisar([e], agora, [10, 1], new Set())
+    expect(r.map((x) => x.marco)).toEqual([10])
+    const avisados = new Set(r[0].chaves)
+    expect(eventosParaAvisar([e], agora, [10, 1], avisados)).toHaveLength(0)
+    const quase = new Date(2026, 10, 15, 10, 7, 10)
+    expect(eventosParaAvisar([e], quase, [10, 1], avisados).map((x) => x.marco)).toEqual([1])
+  })
+  it('ligou o PC em cima da hora: só o aviso de 1 min', () => {
+    const e = { id: 'e', titulo: 'x', inicio: isoLocal(new Date(2026, 10, 15, 10, 1)), fim: '', diaInteiro: false, local: null, meet: null, link: null }
+    const r = eventosParaAvisar([e], agora, [10, 1], new Set())
+    expect(r.map((x) => [x.marco, x.chaves.length])).toEqual([[1, 2]])
   })
   it('evento novo com Meet e convidados', () => {
     const c = corpoNovoEvento({ titulo: 'Reunião', inicio: '2026-11-16T09:00:00-03:00', duracaoMin: 45, convidados: ['a@b.com'], comMeet: true }, 'req1')

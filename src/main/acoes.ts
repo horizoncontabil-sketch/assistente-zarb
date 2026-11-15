@@ -12,10 +12,15 @@ import { tipoDoDestino } from '../shared/destino'
 import { novaTarefa } from '../shared/tarefas'
 import type { Atalho, Ok, Repetir, Tarefa } from '../shared/tipos'
 
-export type Aviso = (o: 'tarefas' | 'eventos' | 'atalhos' | 'config') => void
+export type Aviso = (o: 'tarefas' | 'eventos' | 'atalhos' | 'config' | 'habitos') => void
 let avisar: Aviso = () => {}
 export function aoMudar(f: Aviso) {
   avisar = f
+}
+
+export function avisarMudanca() {
+  avisar('tarefas')
+  avisar('habitos')
 }
 
 export function criarTarefa(titulo: string, quando: string | null, repetir: Repetir): Tarefa {
@@ -49,7 +54,7 @@ export function salvarAtalho(nome: string, destino: string, id?: string): Ok {
   if (!tipo) return { ok: false, erro: 'Use um link que comece com https:// ou um caminho do Windows (C:\\...).' }
   const repetido = dados.ler.atalhos().find((a) => a.nome.toLowerCase() === n.toLowerCase() && a.id !== id)
   if (repetido) return { ok: false, erro: `Já existe um atalho "${repetido.nome}".` }
-  dados.mudarAtalhos((l) => (id ? l.map((a) => (a.id === id ? { ...a, nome: n, destino: d, tipo } : a)) : [...l, { id: randomUUID(), nome: n, destino: d, tipo }]))
+  dados.mudarAtalhos((l) => (id ? l.map((a) => (a.id === id ? { ...a, nome: n, destino: d, tipo } : a)) : [...l, { id: randomUUID(), nome: n, destino: d, tipo, proprio: true }]))
   avisar('atalhos')
   return { ok: true }
 }

@@ -9,18 +9,24 @@ import * as config from './config'
 import * as dados from './dados'
 import * as google from './google'
 import * as groq from './groq'
+import * as pc from './pc'
 import { ehPrivado, FORMATOS_PRIVADOS } from '../shared/copias'
 import { descreverQuando } from '../shared/datas'
 import { linkSeguro } from '../shared/destino'
 import { eventosParaAvisar } from '../shared/google'
+import { lembretesDeHabito, registrar as registrarNoHabito, TODO_DIA, type Habito } from '../shared/habitos'
+import { bordaMaisProxima, horizontal, posicaoValida, posicionarJanela } from '../shared/posicao'
 import { pastaAceitavel } from '../shared/claude'
 import { adiar, concluir, devidas } from '../shared/tarefas'
-import type { ComandoJanela, Configuracoes, Mensagem, Mudou, QualAtalho, RascunhoEvento, Repetir } from '../shared/tipos'
+import type { ComandoJanela, Configuracoes, Mensagem, Mudou, NovoHabito, PedidoPc, QualAtalho, RascunhoEvento, Repetir } from '../shared/tipos'
 
 const APP_ID = 'br.com.zarbmedia.assistente'
 // A janela é transparente e maior que o entalho: o espaço vazio deixa o clique passar.
-const LARGURA = 760
+const LARGURA = 960
 const ALTURA = 660
+// Comprimento do entalho ao longo da borda (deitado no topo e embaixo, em pé nas laterais).
+const COMPRIMENTO_DEITADO = 340
+const COMPRIMENTO_EM_PE = 210
 
 let janela: BrowserWindow | null = null
 let bandeja: Tray | null = null
@@ -38,10 +44,47 @@ app.setAppUserModelId(APP_ID)
 
 const recursos = () => (app.isPackaged ? process.resourcesPath : join(__dirname, '../../resources'))
 
+let arrastando: ReturnType<typeof setInterval> | null = null
+let telaDoEntalho: number | null = null
+
+function areaDaTela() {
+  const telas = screen.getAllDisplays()
+  return (telas.find((t) => t.id === telaDoEntalho) ?? screen.getPrimaryDisplay()).workArea
+}
+
 function posicionar() {
-  if (!janela) return
-  const tela = screen.getPrimaryDisplay().bounds
-  janela.setBounds({ x: Math.round(tela.x + (tela.width - LARGURA) / 2), y: tela.y, width: LARGURA, height: ALTURA })
+  if (!janela || arrastando) return
+  const pos = config.ler().posicao
+  const comprimento = horizontal(pos.borda) ? COMPRIMENTO_DEITADO : COMPRIMENTO_EM_PE
+  const r = posicionarJanela(pos, areaDaTela(), LARGURA, ALTURA, comprimento)
+  janela.setBounds({ x: r.x, y: r.y, width: LARGURA, height: ALTURA })
+  janela.webContents.send('posicao', { borda: pos.borda, deslocamento: r.deslocamento, arrastando: false })
+}
+
+// Arrastar: a janela segue o ponteiro; ao soltar, gruda na borda mais próxima da tela onde ele está.
+function comecarArraste() {
+  if (!janela || arrastando) return
+  janela.setIgnoreMouseEvents(false)
+  janela.webContents.send('posicao', { borda: 'topo', deslocamento: (LARGURA - COMPRIMENTO_DEITADO) / 2, arrastando: true })
+  const inicio = Date.now()
+  arrastando = setInterval(() => {
+    const p = screen.getCursorScreenPoint()
+    janela?.setPosition(Math.round(p.x - LARGURA / 2), Math.round(p.y - 19))
+    if (Date.now() - inicio > 30_000) terminarArraste() // o botão foi solto fora: não fica preso
+  }, 16)
+}
+
+function terminarArraste() {
+  if (!arrastando) return
+  clearInterval(arrastando)
+  arrastando = null
+  const p = screen.getCursorScreenPoint()
+  const tela = screen.getDisplayNearestPoint(p)
+  telaDoEntalho = tela.id
+  config.gravar({ posicao: bordaMaisProxima(p, tela.workArea) })
+  posicionar()
+  if (!expandido) janela?.setIgnoreMouseEvents(true, { forward: true })
+  mudou('config')
 }
 
 function criarJanela() {
@@ -88,7 +131,8 @@ function criarJanela() {
   })
   if (process.env.ELECTRON_RENDERER_URL) janela.loadURL(process.env.ELECTRON_RENDERER_URL)
   else janela.loadFile(join(__dirname, '../renderer/index.html'))
-  wc.once('did-finish-load', () => {
+  wc.on('did-finish-load', () => {
+    posicionar()
     if (config.ler().entalhoSempreVisivel) janela?.showInactive()
   })
 }
@@ -150,7 +194,7 @@ function registrarTodos() {
 // ---------- lembretes, agenda e cópias ----------
 
 function notificar(titulo: string, corpo: string) {
-  if (!Notification.isSupported()) return
+  if (!Notification.isSupported() || config.ler().silenciarAvisos) return
   const n = new Notification({ title: titulo, body: corpo })
   n.on('click', () => enviar({ tipo: 'expandir', aba: 'hoje' }))
   n.show()
@@ -189,10 +233,21 @@ async function lerAgenda() {
 const eventosAvisados = new Set<string>()
 function verificarEventos() {
   const agora = new Date()
-  for (const { e, chave, min } of eventosParaAvisar(dados.ler.agenda().eventos, agora, config.ler().avisoEventoMin, eventosAvisados)) {
-    eventosAvisados.add(chave)
-    enviar({ tipo: 'aviso', aviso: { tipo: 'evento', evento: e, minutos: min } })
-    notificar(e.titulo, min <= 0 ? 'Começando agora' : `Começa em ${min} min`)
+  const antes = config.ler().avisoEventoMin
+  const marcos = antes > 1 ? [antes, 1] : [1]
+  for (const { e, min, marco, chaves } of eventosParaAvisar(dados.ler.agenda().eventos, agora, marcos, eventosAvisados)) {
+    chaves.forEach((c) => eventosAvisados.add(c))
+    enviar({ tipo: 'aviso', aviso: { tipo: 'evento', evento: e, minutos: min, marco } })
+    if (marco === 1) notificar(e.titulo, e.meet ? 'Começa em 1 minuto. Entre pelo assistente.' : 'Começa em 1 minuto.')
+  }
+}
+
+function verificarHabitos() {
+  const agora = new Date()
+  for (const h of lembretesDeHabito(dados.ler.habitos(), agora, dados.ler.avisosHabitos())) {
+    dados.marcarAvisoHabito(h.id, agora)
+    enviar({ tipo: 'aviso', aviso: { tipo: 'habito', habito: h } })
+    notificar('Hábito', h.nome)
   }
 }
 
@@ -271,6 +326,8 @@ function configuracoes(): Configuracoes {
     avisoEventoMin: c.avisoEventoMin,
     copiarLembretesParaAgenda: c.copiarLembretesParaAgenda,
     pastasClaude: c.pastasClaude,
+    posicao: c.posicao,
+    silenciarAvisos: c.silenciarAvisos,
     modeloVozDisponivel: existsSync(join(recursos(), 'voz', 'modelo-pt.tar.gz')),
   }
 }
@@ -293,6 +350,54 @@ function rascunhoValido(r: unknown): RascunhoEvento | null {
     duracaoMin: Number.isInteger(d) && d >= 5 && d <= 720 ? d : 30,
     convidados: Array.isArray(x.convidados) ? x.convidados.filter((e) => typeof e === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)).slice(0, 20) : [],
     comMeet: x.comMeet === true,
+  }
+}
+
+function habitoValido(v: unknown): NovoHabito | null {
+  const h = v as NovoHabito
+  const nome = typeof h?.nome === 'string' ? h.nome.trim().slice(0, 80) : ''
+  const dias = Array.isArray(h?.dias) ? [...new Set(h.dias.filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))] : TODO_DIA
+  if (!nome || !dias.length) return null
+  const m = h.meta
+  const meta =
+    m && Number(m.total) > 0 && Number(m.passo) > 0 && typeof m.unidade === 'string'
+      ? { total: Number(m.total), passo: Number(m.passo), unidade: m.unidade.trim().slice(0, 20) || 'vezes' }
+      : null
+  const l = h.lembrete
+  const hora = (x: unknown) => typeof x === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(x)
+  const lembrete: Habito['lembrete'] =
+    l?.tipo === 'hora' && hora(l.hora)
+      ? { tipo: 'hora', hora: l.hora }
+      : l?.tipo === 'intervalo' && hora(l.de) && hora(l.ate) && Number(l.aCadaMin) >= 15
+        ? { tipo: 'intervalo', aCadaMin: Math.round(Number(l.aCadaMin)), de: l.de, ate: l.ate }
+        : null
+  return { nome, dias, meta, lembrete }
+}
+
+function pedidoPcValido(v: unknown): PedidoPc | null {
+  const p = v as PedidoPc
+  const sim = (x: unknown) => x === true
+  switch (p?.tipo) {
+    case 'volume': {
+      const m = p.mudanca ?? {}
+      return { tipo: 'volume', mudanca: { nivel: typeof m.nivel === 'number' ? m.nivel : undefined, mudar: typeof m.mudar === 'number' ? m.mudar : undefined, mudo: typeof m.mudo === 'boolean' ? m.mudo : undefined } }
+    }
+    case 'brilho':
+      return typeof p.nivel === 'number' ? { tipo: 'brilho', nivel: p.nivel } : null
+    case 'energia':
+      return ['bloquear', 'suspender', 'reiniciar', 'desligar'].includes(p.acao) ? { tipo: 'energia', acao: p.acao, confirmado: sim(p.confirmado) } : null
+    case 'esvaziarLixeira':
+    case 'limparTemporarios':
+    case 'organizarAreaDeTrabalho':
+      return { tipo: p.tipo, confirmado: sim(p.confirmado) }
+    case 'fecharPrograma':
+      return Number.isInteger(p.pid) ? { tipo: 'fecharPrograma', pid: p.pid, confirmado: sim(p.confirmado) } : null
+    case 'mostrarDownload':
+      return typeof p.nome === 'string' ? { tipo: 'mostrarDownload', nome: p.nome } : null
+    case 'abrirDownloads':
+      return { tipo: 'abrirDownloads' }
+    default:
+      return null
   }
 }
 
@@ -469,7 +574,7 @@ function ligarIpc() {
     const x = (m ?? {}) as Record<string, unknown>
     const mud: Partial<config.Gravado> = {}
     if (typeof x.modelo === 'string' && x.modelo.trim()) mud.modelo = x.modelo.trim().slice(0, 100)
-    for (const k of ['entalhoSempreVisivel', 'responderFalando', 'chamadoPorVoz', 'copiasAtivas', 'copiarLembretesParaAgenda'] as const) {
+    for (const k of ['entalhoSempreVisivel', 'responderFalando', 'chamadoPorVoz', 'copiasAtivas', 'copiarLembretesParaAgenda', 'silenciarAvisos'] as const) {
       if (typeof x[k] === 'boolean') mud[k] = x[k]
     }
     if (typeof x.avisoEventoMin === 'number' && x.avisoEventoMin >= 0 && x.avisoEventoMin <= 120) mud.avisoEventoMin = Math.round(x.avisoEventoMin)
@@ -488,6 +593,37 @@ function ligarIpc() {
   })
 
   h('atualizacao', () => atualizacao.estadoAtualizacao())
+  h('habitos', () => dados.ler.habitos())
+  h('salvarHabito', (_e, novo: unknown, id: unknown) => {
+    const n = habitoValido(novo)
+    if (!n) return { ok: false, erro: 'Dê um nome ao hábito e escolha pelo menos um dia.' }
+    if (typeof id === 'string') dados.mudarHabitos((l) => l.map((x) => (x.id === id ? { ...x, ...n } : x)))
+    else dados.mudarHabitos((l) => [...l, { ...n, id: randomUUID(), registro: {}, criadoEm: new Date().toISOString() }])
+    mudou('habitos')
+    return { ok: true }
+  })
+  h('apagarHabito', (_e, id: unknown) => {
+    dados.mudarHabitos((l) => l.filter((x) => x.id !== id))
+    mudou('habitos')
+  })
+  h('registrarHabito', (_e, id: unknown, delta: unknown) => {
+    if (typeof delta !== 'number' || !Number.isFinite(delta)) return
+    dados.mudarHabitos((l) => l.map((x) => (x.id === id ? registrarNoHabito(x, new Date(), delta) : x)))
+    mudou('habitos')
+  })
+  h('pcEstado', () => pc.estado())
+  h('pc', (_e, pedido: unknown) => {
+    const p = pedidoPcValido(pedido)
+    return p ? pc.executar(p) : { ok: false, erro: 'Pedido inválido.' }
+  })
+  h('arrastar', (_e, fase: unknown) => (fase === 'inicio' ? comecarArraste() : terminarArraste()))
+  h('definirPosicao', (_e, p: unknown) => {
+    const pos = posicaoValida(p)
+    if (!pos) return
+    config.gravar({ posicao: pos })
+    posicionar()
+    mudou('config')
+  })
   h('expandido', (_e, sim: unknown) => definirExpandido(sim === true))
   h('mouseSobre', (_e, sim: unknown) => {
     if (!expandido) janela?.setIgnoreMouseEvents(sim !== true, { forward: true })
@@ -515,7 +651,8 @@ app.whenReady().then(() => {
   screen.on('display-removed', posicionar)
 
   setInterval(verificarLembretes, 15_000)
-  setInterval(verificarEventos, 30_000)
+  setInterval(verificarEventos, 15_000)
+  setInterval(verificarHabitos, 30_000)
   setInterval(vigiarCopias, 800)
   setInterval(lerAgenda, 5 * 60_000)
   setTimeout(verificarLembretes, 3000)

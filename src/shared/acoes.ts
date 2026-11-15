@@ -2,6 +2,7 @@
 import { validarQuando } from './datas'
 import { acharAtalho, normalizar } from './comandos'
 import { tipoDoDestino } from './destino'
+import { acharHabito, type Habito } from './habitos'
 import type { Atalho, PastaClaude, RascunhoEvento, Repetir, Tarefa } from './tipos'
 
 const texto = (descricao: string) => ({ type: 'string', description: descricao })
@@ -76,7 +77,43 @@ export const FERRAMENTAS = [
       required: ['nome', 'destino'],
     },
   },
+  {
+    name: 'registrar_habito',
+    description: 'Marca um hábito do Paulo como feito hoje, ou soma uma quantidade num hábito fracionado ("bebi 500 ml de água", "li 3 páginas", "fiz a academia").',
+    parameters: {
+      type: 'object',
+      properties: {
+        habito: texto('Nome do hábito, da lista.'),
+        quantidade: { type: 'number', description: 'Quanto fez, na unidade do hábito (litros, minutos, páginas). Omita em hábito de sim ou não.' },
+      },
+      required: ['habito'],
+    },
+  },
+  {
+    name: 'volume',
+    description: 'Muda o volume do PC.',
+    parameters: {
+      type: 'object',
+      properties: {
+        nivel: { type: 'integer', description: 'Volume de 0 a 100.' },
+        mudar: { type: 'integer', description: 'Quanto subir (positivo) ou baixar (negativo).' },
+        mudo: { type: 'boolean', description: 'true para silenciar, false para tirar do mudo.' },
+      },
+    },
+  },
+  {
+    name: 'acao_pc',
+    description: 'Bloqueia, suspende, reinicia ou desliga o PC. Suspender, reiniciar e desligar pedem confirmação do Paulo na tela.',
+    parameters: {
+      type: 'object',
+      properties: { acao: { type: 'string', enum: ['bloquear', 'suspender', 'reiniciar', 'desligar'] } },
+      required: ['acao'],
+    },
+  },
 ] as const
+
+export type AcaoPc = 'bloquear' | 'suspender' | 'reiniciar' | 'desligar'
+export type MudancaVolume = { nivel?: number; mudar?: number; mudo?: boolean }
 
 export type Acao =
   | { tipo: 'criar_tarefa'; titulo: string; quando: string | null; repetir: Repetir }
@@ -86,8 +123,11 @@ export type Acao =
   | { tipo: 'evento'; rascunho: RascunhoEvento }
   | { tipo: 'claude'; pedido: string; pastaId: string | null }
   | { tipo: 'ensinar'; nome: string; destino: string }
+  | { tipo: 'habito'; habito: Habito; quantidade: number }
+  | { tipo: 'volume'; mudanca: MudancaVolume }
+  | { tipo: 'pc'; acao: AcaoPc }
 
-export type Contexto = { agora: Date; atalhos: Atalho[]; pastas: PastaClaude[]; tarefas: Tarefa[] }
+export type Contexto = { agora: Date; atalhos: Atalho[]; pastas: PastaClaude[]; tarefas: Tarefa[]; habitos: Habito[] }
 
 type Resultado = { ok: true; acao: Acao } | { ok: false; erro: string }
 
@@ -153,6 +193,28 @@ export function validarAcao(nome: string, argsJson: string, ctx: Contexto): Resu
       const destino = str(a.destino, 2000)
       if (!nomeAt || !destino || !tipoDoDestino(destino)) return { ok: false, erro: 'O atalho precisa de um nome e de um link https:// ou caminho do Windows.' }
       return { ok: true, acao: { tipo: 'ensinar', nome: nomeAt, destino } }
+    }
+    case 'registrar_habito': {
+      const habito = acharHabito(ctx.habitos, str(a.habito) ?? '')
+      if (!habito) return { ok: false, erro: `Não achei o hábito "${str(a.habito) ?? ''}".` }
+      const q = Number(a.quantidade)
+      const quantidade = habito.meta ? (Number.isFinite(q) && q > 0 && q <= habito.meta.total * 10 ? q : habito.meta.passo) : 1
+      return { ok: true, acao: { tipo: 'habito', habito, quantidade } }
+    }
+    case 'volume': {
+      const mudanca: MudancaVolume = {}
+      const n = Number(a.nivel)
+      const m = Number(a.mudar)
+      if (a.nivel !== undefined && Number.isFinite(n)) mudanca.nivel = Math.min(100, Math.max(0, Math.round(n)))
+      if (a.mudar !== undefined && Number.isFinite(m)) mudanca.mudar = Math.min(100, Math.max(-100, Math.round(m)))
+      if (typeof a.mudo === 'boolean') mudanca.mudo = a.mudo
+      return Object.keys(mudanca).length ? { ok: true, acao: { tipo: 'volume', mudanca } } : { ok: false, erro: 'Quanto de volume?' }
+    }
+    case 'acao_pc': {
+      const acao = a.acao
+      return acao === 'bloquear' || acao === 'suspender' || acao === 'reiniciar' || acao === 'desligar'
+        ? { ok: true, acao: { tipo: 'pc', acao } }
+        : { ok: false, erro: 'Não entendi o que fazer com o PC.' }
     }
     default:
       return { ok: false, erro: 'Pedido fora do que eu sei fazer.' }
