@@ -46,6 +46,8 @@ const api: ApiAssistente = {
   salvarHabito: i('salvarHabito'),
   apagarHabito: i('apagarHabito'),
   registrarHabito: i('registrarHabito'),
+  adiarSono: i('adiarSono'),
+  suspenderAgora: i('suspenderAgora'),
   saude: i('saude'),
   salvarPlano: i('salvarPlano'),
   registrarCorpo: i('registrarCorpo'),

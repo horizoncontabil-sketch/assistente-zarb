@@ -161,6 +161,8 @@ export type ApiAssistente = {
   salvarHabito(h: NovoHabito, id?: string): Promise<Ok>
   apagarHabito(id: string): Promise<void>
   registrarHabito(id: string, delta: number): Promise<void>
+  adiarSono(): Promise<void>
+  suspenderAgora(): Promise<void>
   // saúde
   saude(): Promise<Saude>
   salvarPlano(p: Plano): Promise<Ok>
@@ -201,6 +203,7 @@ export type Aviso =
   | { tipo: 'lembrete'; tarefa: Tarefa; atrasado: boolean }
   | { tipo: 'evento'; evento: Evento; minutos: number; marco: number }
   | { tipo: 'habito'; habito: Habito }
+  | { tipo: 'sono'; fase: 'aviso' | 'tela' | 'suspender'; prazo?: string }
 
 export type EstadoAtualizacao =
   | { tipo: 'desligada'; motivo: string }

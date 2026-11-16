@@ -343,7 +343,7 @@ function medidas(modo: string, pos: Pos, comPergunta = false): CSSProperties {
 }
 
 function chave(a: Aviso) {
-  return a.tipo === 'lembrete' ? `t${a.tarefa.id}` : a.tipo === 'habito' ? `h${a.habito.id}` : `e${a.evento.id}${a.marco}`
+  return a.tipo === 'lembrete' ? `t${a.tarefa.id}` : a.tipo === 'habito' ? `h${a.habito.id}` : a.tipo === 'sono' ? `s${a.fase}${a.prazo ?? ''}` : `e${a.evento.id}${a.marco}`
 }
 
 // Desfazer do toast: só o que foi criado ou marcado agora.

@@ -10,7 +10,7 @@ export const supabase = createClient('https://xbqfrjgvevpuiybsvdco.supabase.co',
 export type Refeicao = { id: string; dia: string; tipo: TipoRefeicao; nome: string | null; itens: ItemRefeicao[]; criado_em: string }
 export type RefeicaoSalva = { id: string; nome: string; itens: ItemRefeicao[]; ordem: number }
 export type Serie = { id: string; dia: string; treino: string; exercicio: string; numero: number; aquecimento: boolean; kg: number | null; reps: number | null }
-export type Dia = { dia: string; peso: number | null; passos: number | null }
+export type Dia = { dia: string; peso: number | null; passos: number | null; deitou?: string | null; acordou?: string | null }
 
 export const diaIso = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
@@ -50,7 +50,7 @@ export async function ultimaVez(exercicio: string, antesDe: string): Promise<{ d
   return { dia: ult[0].dia, series }
 }
 
-export const lerDias = (desde: string) => ok<Dia[]>(supabase.from('dias').select('dia,peso,passos').gte('dia', desde).order('dia'))
+export const lerDias = (desde: string) => ok<Dia[]>(supabase.from('dias').select('dia,peso,passos,deitou,acordou').gte('dia', desde).order('dia'))
 export const salvarDia = (d: Partial<Dia> & { dia: string }) => ok(supabase.from('dias').upsert(d, { onConflict: 'dono,dia' }))
 
 // Séries de trabalho do exercício antes de hoje, para a evolução (até ~3 meses de treinos).

@@ -4,6 +4,7 @@ import { metaPassos, treinoDoDia } from '../../src/shared/treino'
 import { diaIso, erroLegivel, lerDias, lerRefeicoes, lerSeriesDoDia, salvarDia, type Dia, type Refeicao, type Serie } from './dados'
 import type { Aba } from './App'
 import { META, fmt, saudacao, dataLonga } from './util'
+import { Sono } from './Sono'
 
 export function Hoje({ ir }: { ir: (a: Aba) => void }) {
   const hoje = diaIso()
@@ -49,6 +50,7 @@ export function Hoje({ ir }: { ir: (a: Aba) => void }) {
         <h1>{saudacao()}, Paulo</h1>
       </div>
       {erro && <div className="aviso erro">{erro}</div>}
+      <Sono />
 
       <section className="bloco">
         <h2>Comida</h2>

@@ -73,6 +73,44 @@ export function Avisos({ aviso, agora, fechar, marca, mais }: Props) {
     )
   }
 
+  if (aviso.tipo === 'sono') {
+    const textos = {
+      aviso: { titulo: 'Hora de ir encerrando', sub: 'Às 22h30 o PC suspende. Salve o que estiver aberto.' },
+      tela: { titulo: 'Luz quente', sub: 'Abaixe a lâmpada e deixe a tela escura e quente (Luz noturna do Windows).' },
+      suspender: { titulo: 'Hora de deitar', sub: aviso.prazo ? `O PC suspende às ${hora(new Date(aviso.prazo))}. Nada é fechado.` : 'O PC vai suspender.' },
+    }[aviso.fase]
+    return (
+      <div className="aviso" role="alert">
+        <div className="aviso-topo">
+          <span style={{ color: 'var(--ambar)', display: 'grid' }}>
+            <Icone nome="relogio" tamanho={22} />
+          </span>
+          <span className="aviso-texto">
+            <small>{textos.sub}</small>
+            <strong>{textos.titulo}</strong>
+          </span>
+          {extra}
+        </div>
+        <div className="aviso-acoes">
+          {aviso.fase === 'suspender' ? (
+            <>
+              <button type="button" className="botao principal grande" onClick={e(() => api.suspenderAgora())}>
+                Suspender agora
+              </button>
+              <button type="button" className="botao" onClick={e(() => api.adiarSono())}>
+                Estou em algo importante (+15 min)
+              </button>
+            </>
+          ) : (
+            <button type="button" className="botao principal grande" onClick={fechar}>
+              Ok
+            </button>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   const ev = aviso.evento
   const min = minutosAte(ev.inicio, agora)
   // 10 minutos antes: só um toque. 1 minuto antes: o aviso com o botão de entrar.

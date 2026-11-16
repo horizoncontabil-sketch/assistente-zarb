@@ -10,6 +10,8 @@ import * as dados from './dados'
 import * as google from './google'
 import * as groq from './groq'
 import * as pc from './pc'
+import { lerJson, gravarJson } from './armazem'
+import { SONO, faseSono, noiteDe } from '../shared/sono'
 import { ehPrivado, FORMATOS_PRIVADOS } from '../shared/copias'
 import { descreverQuando } from '../shared/datas'
 import { linkSeguro } from '../shared/destino'
@@ -249,6 +251,49 @@ function verificarHabitos() {
     enviar({ tipo: 'aviso', aviso: { tipo: 'habito', habito: h } })
     notificar('Hábito', h.nome)
   }
+}
+
+// ---------- sono (21h30 aviso, 22h tela quente, 22h30 o PC suspende; adiável e registrado) ----------
+type NoiteSono = { noite: string; avisou?: boolean; tela?: boolean; adiamentos: number; adiadoAte?: string; suspendeuEm?: string[] }
+let prazoSuspender: number | null = null
+const noites = () => lerJson<NoiteSono[]>('sono', [])
+function noiteAtual(agora: Date): NoiteSono {
+  const n = noiteDe(agora)
+  return noites().find((x) => x.noite === n) ?? { noite: n, adiamentos: 0 }
+}
+function gravarNoite(x: NoiteSono) {
+  gravarJson('sono', [...noites().filter((y) => y.noite !== x.noite), x].slice(-120))
+}
+function suspenderPorSono(agora: Date) {
+  const x = noiteAtual(agora)
+  gravarNoite({ ...x, suspendeuEm: [...(x.suspendeuEm ?? []), agora.toISOString()] })
+  prazoSuspender = null
+  // Regra combinada com o Paulo: sem resposta em 5 min, suspende (não fecha nada). O clique é o "confirmado".
+  void pc.executar({ tipo: 'energia', acao: 'suspender', confirmado: true })
+}
+function verificarSono() {
+  const agora = new Date()
+  const f = faseSono(agora)
+  const x = noiteAtual(agora)
+  if (f === 'aviso' && !x.avisou) {
+    gravarNoite({ ...x, avisou: true })
+    enviar({ tipo: 'aviso', aviso: { tipo: 'sono', fase: 'aviso' } })
+    notificar('Hora de encerrar', `Às ${SONO.deitar.replace(':', 'h')} o PC suspende.`)
+  }
+  if (f === 'tela' && !x.tela) {
+    gravarNoite({ ...x, tela: true })
+    enviar({ tipo: 'aviso', aviso: { tipo: 'sono', fase: 'tela' } })
+  }
+  if (f !== 'deitar') {
+    prazoSuspender = null
+    return
+  }
+  if (x.adiadoAte && agora < new Date(x.adiadoAte)) return
+  if (prazoSuspender === null) {
+    prazoSuspender = agora.getTime() + SONO.prazo * 60_000
+    enviar({ tipo: 'aviso', aviso: { tipo: 'sono', fase: 'suspender', prazo: new Date(prazoSuspender).toISOString() } })
+    notificar('Hora de deitar', `O PC suspende em ${SONO.prazo} minutos.`)
+  } else if (agora.getTime() >= prazoSuspender) suspenderPorSono(agora)
 }
 
 let ultimaCopia = ''
@@ -717,6 +762,13 @@ function ligarIpc() {
   h('interpretarRefeicao', (_e, t: unknown, dia: unknown) =>
     typeof t === 'string' && t.trim() && typeof dia === 'string' ? assistente.interpretarRefeicao(t, dia) : { ok: false, erro: 'Descreva a refeição.' },
   )
+  h('adiarSono', () => {
+    const agora = new Date()
+    const x = noiteAtual(agora)
+    gravarNoite({ ...x, adiamentos: x.adiamentos + 1, adiadoAte: new Date(agora.getTime() + SONO.adiar * 60_000).toISOString() })
+    prazoSuspender = null
+  })
+  h('suspenderAgora', () => suspenderPorSono(new Date()))
   h('pcEstado', () => pc.estado())
   h('pc', (_e, pedido: unknown) => {
     const p = pedidoPcValido(pedido)
@@ -759,6 +811,7 @@ app.whenReady().then(() => {
   setInterval(verificarLembretes, 15_000)
   setInterval(verificarEventos, 15_000)
   setInterval(verificarHabitos, 30_000)
+  setInterval(verificarSono, 15_000)
   setInterval(vigiarCopias, 800)
   setInterval(lerAgenda, 5 * 60_000)
   setTimeout(verificarLembretes, 3000)
