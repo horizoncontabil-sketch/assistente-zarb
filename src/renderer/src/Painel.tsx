@@ -32,26 +32,23 @@ export type PropsPainel = {
   fechar: () => void
 }
 
-const ITENS: { id: Aba; nome: string; icone: NomeIcone }[] = [
-  { id: 'hoje', nome: 'Hoje', icone: 'sol' },
-  { id: 'metas', nome: 'Metas', icone: 'alvo' },
-  { id: 'alimentacao', nome: 'Alimentação', icone: 'prato' },
-  { id: 'corpo', nome: 'Corpo', icone: 'corpo' },
-  { id: 'tarefas', nome: 'Tarefas', icone: 'check' },
-  { id: 'habitos', nome: 'Hábitos', icone: 'habito' },
-  { id: 'agenda', nome: 'Agenda', icone: 'agenda' },
-  { id: 'copiados', nome: 'Copiados', icone: 'copia' },
-  { id: 'atalhos', nome: 'Atalhos', icone: 'link' },
-  { id: 'pc', nome: 'PC', icone: 'pc' },
+// 5 telas no menu (decisão do Paulo, 16/11/2026: "muitas telas"); as telas antigas viram abas internas de cada grupo.
+const GRUPOS: { nome: string; icone: NomeIcone; abas: { id: Aba; nome: string }[] }[] = [
+  { nome: 'Hoje', icone: 'sol', abas: [{ id: 'hoje', nome: 'Dia' }, { id: 'agenda', nome: 'Agenda' }] },
+  { nome: 'Rotina', icone: 'check', abas: [{ id: 'tarefas', nome: 'Tarefas' }, { id: 'habitos', nome: 'Hábitos' }] },
+  { nome: 'Saúde', icone: 'prato', abas: [{ id: 'alimentacao', nome: 'Comida' }, { id: 'corpo', nome: 'Corpo' }, { id: 'metas', nome: 'Meta' }] },
+  { nome: 'Ferramentas', icone: 'link', abas: [{ id: 'atalhos', nome: 'Atalhos' }, { id: 'copiados', nome: 'Copiados' }, { id: 'pc', nome: 'PC' }] },
 ]
+const grupoDe = (a: Aba | 'conversa') => GRUPOS.find((g) => g.abas.some((x) => x.id === a)) ?? null
 
 export function Painel(p: PropsPainel) {
   const { dados, agora, aba, setAba } = p
   const atrasadas = dados.tarefas.filter((t) => !t.feita && t.quando && new Date(t.quando) <= agora).length
   const conectado = !!dados.config?.google.conectado
 
-  const item = (i: { id: Aba; nome: string; icone: NomeIcone }) => (
-    <button key={i.id} type="button" className={`item ${aba === i.id ? 'ativo' : ''}`} aria-current={aba === i.id ? 'page' : undefined} onClick={() => setAba(i.id)}>
+  const grupo = grupoDe(aba)
+  const item = (i: { id: Aba; nome: string; icone: NomeIcone; ativo: boolean }) => (
+    <button key={i.id} type="button" className={`item ${i.ativo ? 'ativo' : ''}`} aria-current={i.ativo ? 'page' : undefined} onClick={() => setAba(i.id)}>
       <Icone nome={i.icone} tamanho={16} />
       <span className="nome">{i.nome}</span>
       {i.id === 'tarefas' && atrasadas > 0 && <span className="contagem">{atrasadas === 1 ? '1 atrasada' : `${atrasadas} atrasadas`}</span>}
@@ -65,9 +62,9 @@ export function Painel(p: PropsPainel) {
           <span className="marca-anel" aria-hidden="true" />
           <strong>assistente pessoal</strong>
         </div>
-        {ITENS.map(item)}
+        {GRUPOS.map((g) => item({ id: g.abas[0].id, nome: g.nome, icone: g.icone, ativo: grupo === g }))}
         <div className="vao" />
-        {item({ id: 'config', nome: 'Configurações', icone: 'config' })}
+        {item({ id: 'config', nome: 'Configurações', icone: 'config', ativo: aba === 'config' })}
         <div className="pessoa">
           <span className="avatar">P</span>
           <span className="pessoa-texto">
@@ -78,6 +75,15 @@ export function Painel(p: PropsPainel) {
       </nav>
 
       <main className="conteudo">
+        {grupo && (
+          <div className="segmentos" role="tablist" aria-label={grupo.nome} style={{ alignSelf: 'flex-start' }}>
+            {grupo.abas.map((x) => (
+              <button key={x.id} type="button" role="tab" aria-selected={aba === x.id} className={aba === x.id ? 'ativo' : ''} onClick={() => setAba(x.id)}>
+                {x.nome}
+              </button>
+            ))}
+          </div>
+        )}
         {aba === 'conversa' && <Conversa {...p} />}
         {aba === 'hoje' && <Hoje {...p} />}
         {aba === 'metas' && <Metas dados={dados} agora={agora} />}
