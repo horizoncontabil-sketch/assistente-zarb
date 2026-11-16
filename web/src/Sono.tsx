@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { SONO, horasDormidas, noHorario, placarSono } from '../../src/shared/sono'
 import { diaIso, erroLegivel, lerDias, salvarDia, type Dia } from './dados'
+import { desligarAvisos, estadoAvisos, ligarAvisos, type EstadoAvisos } from './avisos'
 
 // A noite fica no dia em que ele acorda: "Vou dormir" depois do meio-dia vai para amanhã.
 const amanha = () => {
@@ -18,6 +19,20 @@ export function Sono() {
   const [acordou, setAcordou] = useState('')
   const [erro, setErro] = useState<string | null>(null)
   const [salvo, setSalvo] = useState(false)
+  const [avisos, setAvisos] = useState<EstadoAvisos | null>(null)
+
+  useEffect(() => {
+    estadoAvisos().then(setAvisos).catch(() => setAvisos('sem-suporte'))
+  }, [])
+
+  async function trocarAvisos() {
+    setErro(null)
+    try {
+      setAvisos(avisos === 'ligado' ? await desligarAvisos() : await ligarAvisos())
+    } catch (e) {
+      setErro(erroLegivel(e))
+    }
+  }
 
   useEffect(() => {
     const d = new Date()
@@ -85,6 +100,12 @@ export function Sono() {
           <span className="num">{p.noHorario} de {p.noites} {p.noites === 1 ? 'noite' : 'noites'} no horário</span>
         </div>
       )}
+      {avisos === 'desligado' && <button className="botao seg" onClick={trocarAvisos}>Ativar avisos às 21h30 e 22h30</button>}
+      {avisos === 'ligado' && (
+        <div className="linha peq"><span className="suave">Avisos às 21h30 e 22h30 ligados</span><button className="link" onClick={trocarAvisos}>Desligar</button></div>
+      )}
+      {avisos === 'negado' && <span className="peq cinza">Avisos bloqueados. Libere em Ajustes › Notificações › Assistente.</span>}
+      {avisos === 'fora-do-icone' && <span className="peq cinza">Para receber os avisos de sono, abra o app pelo ícone da tela de início.</span>}
       {!tarde && deitou && !noHorario(deitou) && <span className="peq cinza">No horário é deitar até 22h45.</span>}
     </section>
   )
