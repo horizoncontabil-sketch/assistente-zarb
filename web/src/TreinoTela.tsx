@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { TREINOS, acharTreino, cargaAquecimento, sugerirCarga, treinoDoDia, type Exercicio, type Treino } from '../../src/shared/treino'
-import { apagarSerie, diaIso, erroLegivel, lerSeriesDoDia, salvarSerie, ultimaVez, type Serie } from './dados'
+import { TREINOS, acharTreino, cargaAquecimento, evolucao, lerSerieFalada, sugerirCarga, treinoDoDia, type Exercicio, type Treino } from '../../src/shared/treino'
+import { apagarSerie, diaIso, erroLegivel, historico, lerSeriesDoDia, salvarSerie, ultimaVez, type Serie } from './dados'
 import { kgTexto, numero } from './util'
 
 type Linha = { numero: number; aquecimento: boolean; rotulo: string; kg: string; reps: string; feita: boolean; dicaReps: string }
@@ -115,6 +115,8 @@ function ExercicioTela(props: {
   const [ultima, setUltima] = useState<{ dia: string; series: Serie[] } | null | undefined>(undefined)
   const [linhas, setLinhas] = useState<Linha[]>([])
   const [erro, setErro] = useState<string | null>(null)
+  const [fala, setFala] = useState('')
+  const [hist, setHist] = useState<Serie[] | null>(null)
 
   useEffect(() => {
     ultimaVez(ex.id, hoje)
@@ -154,8 +156,8 @@ function ExercicioTela(props: {
       }),
     )
 
-  async function marcar(i: number) {
-    const l = linhas[i]
+  async function marcar(i: number, dito?: { kg: string; reps: string }) {
+    const l = dito ? { ...linhas[i], ...dito } : linhas[i]
     setErro(null)
     const kg = numero(l.kg)
     const reps = numero(l.reps || (l.aquecimento ? l.dicaReps : String(ex.faixa[1])))
@@ -169,13 +171,26 @@ function ExercicioTela(props: {
       }
       await salvarSerie(s)
       props.aoMudar({ ...s, id: '' }, false)
-      setLinhas((ls) => ls.map((x, j) => (j === i ? { ...x, feita: true, reps: String(s.reps ?? '') } : x)))
+      setLinhas((ls) => ls.map((x, j) => (j === i ? { ...x, feita: true, kg: l.kg, reps: String(s.reps ?? '') } : x)))
       const restam = linhas.filter((x, j) => j !== i && !x.feita && !x.aquecimento).length
       if (!l.aquecimento && restam > 0) props.descansar(ex.descanso)
       if (!l.aquecimento && restam === 0) props.descansar(0)
     } catch (e) {
       setErro(erroLegivel(e))
     }
+  }
+
+  // Série dita no microfone do teclado: preenche e marca a próxima série de trabalho ainda não feita.
+  async function registrarFala(e: React.FormEvent) {
+    e.preventDefault()
+    const lido = lerSerieFalada(fala)
+    const i = linhas.findIndex((l) => !l.aquecimento && !l.feita)
+    if (!lido) return setErro('Não entendi. Diga a carga e as repetições, por exemplo "30 kg 8".')
+    if (i === -1) return setErro('Todas as séries já estão marcadas.')
+    const kg = lido.kg != null ? kgTexto(lido.kg) : linhas[i].kg
+    if (!kg) return setErro('Falta a carga: diga, por exemplo, "30 kg 8".')
+    setFala('')
+    await marcar(i, { kg, reps: lido.reps != null ? String(lido.reps) : linhas[i].reps })
   }
 
   const trabalho = linhas.filter((l) => !l.aquecimento)
@@ -202,6 +217,10 @@ function ExercicioTela(props: {
         <ul>{ex.dicas.map((d) => <li key={d}>{d}</li>)}</ul>
       </details>
       {erro && <div className="aviso erro">{erro}</div>}
+      <form className="fala" onSubmit={registrarFala}>
+        <input className="entrada" value={fala} onChange={(e) => setFala(e.target.value)} placeholder='Diga a série: "30 kg 8"' enterKeyHint="done" aria-label="Série falada ou digitada" />
+        <button className="botao" disabled={!fala.trim()}>Marcar</button>
+      </form>
       <div className="series">
         <div className="serie titulo"><span /><span>kg</span><span>reps</span><span /></div>
         {linhas.map((l, i) => (
@@ -214,6 +233,20 @@ function ExercicioTela(props: {
         ))}
       </div>
       {fechouTopo && ex.passo > 0 && <div className="aviso">Fechou todas no topo da faixa. Na próxima vez o app sugere {kgTexto((numero(trabalho[0].kg) ?? 0) + ex.passo)} kg.</div>}
+      <details onToggle={(e) => { if ((e.target as HTMLDetailsElement).open && hist === null) historico(ex.id, hoje).then(setHist).catch(() => setHist([])) }}>
+        <summary>Evolução</summary>
+        {hist === null ? (
+          <span className="peq cinza">Buscando…</span>
+        ) : hist.length === 0 ? (
+          <span className="peq cinza">Ainda sem treinos anteriores deste exercício.</span>
+        ) : (
+          <ul>
+            {evolucao(hist).map((d) => (
+              <li key={d.dia} className="num">{d.dia.slice(8, 10)}/{d.dia.slice(5, 7)} · {kgTexto(d.kg)} kg x {d.reps.join(', ')}</li>
+            ))}
+          </ul>
+        )}
+      </details>
       {todas && (props.proximo ? <button className="botao" onClick={props.proximo}>Próximo exercício</button> : <button className="botao" onClick={props.voltar}>Ver o treino</button>)}
     </>
   )

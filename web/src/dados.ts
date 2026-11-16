@@ -52,3 +52,7 @@ export async function ultimaVez(exercicio: string, antesDe: string): Promise<{ d
 
 export const lerDias = (desde: string) => ok<Dia[]>(supabase.from('dias').select('dia,peso,passos').gte('dia', desde).order('dia'))
 export const salvarDia = (d: Partial<Dia> & { dia: string }) => ok(supabase.from('dias').upsert(d, { onConflict: 'dono,dia' }))
+
+// Séries de trabalho do exercício antes de hoje, para a evolução (até ~3 meses de treinos).
+export const historico = (exercicio: string, antesDe: string) =>
+  ok<Serie[]>(supabase.from('series').select('*').eq('exercicio', exercicio).eq('aquecimento', false).lt('dia', antesDe).order('dia', { ascending: false }).limit(150))

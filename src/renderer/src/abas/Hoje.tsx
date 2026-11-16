@@ -2,6 +2,7 @@ import { hora, mesmoDia } from '../../../shared/datas'
 import { eventosDoDia } from '../../../shared/google'
 import { ehDiaDele, feitoNoDia, numero, progresso, sequencia } from '../../../shared/habitos'
 import { totaisDoDia } from '../../../shared/alimentacao'
+import { TREINOS, treinoDoDia } from '../../../shared/treino'
 import { diaLocal } from '../../../shared/datas'
 import type { Evento, Tarefa } from '../../../shared/tipos'
 import { Compositor, type PropsPainel } from '../Painel'
@@ -83,6 +84,7 @@ export function Hoje({ dados, agora, setAba, enviar, gravacao, entrada }: PropsP
         </section>
 
         <ComidaDeHoje dados={dados} agora={agora} irPara={() => setAba('alimentacao')} />
+        <TreinoDeHoje agora={agora} />
 
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.45fr) minmax(0, 1fr)', gap: 14 }}>
           <section className="cartao" aria-label="A seguir">
@@ -227,5 +229,31 @@ function ComidaDeHoje({ dados, agora, irPara }: { dados: PropsPainel['dados']; a
         {barra(t.p, p.proteina)}
       </span>
     </button>
+  )
+}
+
+// O registro das séries é no celular (na academia); aqui só o lembrete do que é hoje.
+function TreinoDeHoje({ agora }: { agora: Date }) {
+  const t = treinoDoDia(agora)
+  let prox = null as null | { dia: string; nome: string }
+  if (!t)
+    for (let i = 1; i <= 7 && !prox; i++) {
+      const d = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate() + i)
+      const p = treinoDoDia(d)
+      if (p) prox = { dia: i === 1 ? 'amanhã' : d.toLocaleDateString('pt-BR', { weekday: 'long' }), nome: p.nome }
+    }
+  return (
+    <section className="cartao" aria-label="Treino de hoje" style={{ flexDirection: 'row', alignItems: 'center', gap: 18, padding: '14px 18px' }}>
+      <div style={{ display: 'grid', gap: 2 }}>
+        <strong>{t ? `Treino: ${t.nome}` : 'Hoje é descanso'}</strong>
+        <span className="meta">
+          {t
+            ? `${t.foco} · 6h30 · ${t.exercicios.length} exercícios · registre as séries no celular`
+            : prox
+              ? `Próximo: ${prox.dia}, ${prox.nome}`
+              : `${TREINOS.length} treinos na semana`}
+        </span>
+      </div>
+    </section>
   )
 }

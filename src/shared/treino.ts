@@ -141,3 +141,51 @@ export function metaPassos(d: Date): { meta: number; semana: number } {
   const semana = Math.max(1, Math.floor(dias / 7) + 1)
   return { meta: [4000, 5000, 6000][semana - 1] ?? 7000, semana }
 }
+
+// Série dita pelo microfone do teclado ou digitada: "30 kg 8", "30 por 8", "8 com 30", "oito". Só número sozinho = repetições.
+const PALAVRAS: Record<string, number> = {
+  um: 1, uma: 1, dois: 2, duas: 2, tres: 3, quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9, dez: 10,
+  onze: 11, doze: 12, treze: 13, quatorze: 14, catorze: 14, quinze: 15, dezesseis: 16, dezessete: 17, dezoito: 18, dezenove: 19, vinte: 20,
+}
+export function lerSerieFalada(texto: string): { kg: number | null; reps: number | null } | null {
+  const t = texto
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/\b(e meio|e meia)\b/g, ',5')
+    .replace(/\b[a-z]+\b/g, (p) => (p in PALAVRAS ? String(PALAVRAS[p]) : p))
+    .replace(/(\d)\s*,5/g, '$1.5')
+    .replace(/(\d),(\d)/g, '$1.$2')
+  const nums = [...t.matchAll(/(\d+(?:\.\d+)?)\s*(kg|quilos?|kilos?|k\b|reps?|repeticoes|repeticao|vezes)?/g)].map((m) => ({ n: Number(m[1]), un: m[2] ?? '', fim: (m.index ?? 0) + m[0].length }))
+  if (!nums.length || nums.length > 2) return null
+  let kg: number | null = null
+  let reps: number | null = null
+  for (const x of nums) {
+    if (/^(kg|quilo|kilo|k)/.test(x.un)) kg = x.n
+    else if (x.un) reps = x.n
+  }
+  const soltos = nums.filter((x) => !x.un)
+  if (soltos.length === 2) {
+    // "8 com 30": repetições antes. "30 x 8", "30 por 8", "30 8": carga antes.
+    const com = /\bcom\b/.test(t.slice(soltos[0].fim))
+    ;[reps, kg] = com ? [soltos[0].n, soltos[1].n] : [soltos[1].n, soltos[0].n]
+  } else if (soltos.length === 1) {
+    if (kg == null && reps != null) kg = soltos[0].n
+    else if (reps == null) reps = soltos[0].n
+  }
+  if (reps != null && (!Number.isInteger(reps) || reps < 1 || reps > 50)) return null
+  if (kg != null && (kg < 0 || kg > 500)) return null
+  return { kg, reps }
+}
+
+// Evolução: por treino feito, a maior carga das séries de trabalho e as repetições nela (mais recente primeiro).
+export function evolucao(series: { dia: string; kg: number | null; reps: number | null }[]): { dia: string; kg: number; reps: number[] }[] {
+  const porDia = new Map<string, { kg: number; reps: number }[]>()
+  for (const s of series) if (s.kg != null && s.reps != null) porDia.set(s.dia, [...(porDia.get(s.dia) ?? []), { kg: s.kg, reps: s.reps }])
+  return [...porDia.entries()]
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([dia, l]) => {
+      const kg = Math.max(...l.map((x) => x.kg))
+      return { dia, kg, reps: l.filter((x) => x.kg === kg).map((x) => x.reps) }
+    })
+}
