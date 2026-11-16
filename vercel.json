@@ -4,7 +4,7 @@
   "installCommand": "npm ci --prefix web",
   "buildCommand": "npm run build --prefix web",
   "outputDirectory": "web/dist",
-  "functions": { "api/refeicao.ts": { "maxDuration": 20 } },
+  "functions": { "api/refeicao.ts": { "maxDuration": 20 }, "api/groq.ts": { "maxDuration": 30 } },
   "headers": [
     {
       "source": "/(.*)",

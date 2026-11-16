@@ -43,7 +43,7 @@ export function App() {
 
   useEffect(() => {
     api.configuracoes().then((c) => {
-      if (!c.temChaveGroq) abrirPainel('config')
+      if (!c.temChaveGroq && !c.nuvem.email) abrirPainel('config')
     })
   }, [abrirPainel])
 

@@ -5,6 +5,7 @@ import { diaIso, erroLegivel, lerDias, lerRefeicoes, lerSeriesDoDia, salvarDia, 
 import type { Aba } from './App'
 import { META, fmt, saudacao, dataLonga } from './util'
 import { Sono } from './Sono'
+import { Conversa } from './Conversa'
 
 export function Hoje({ ir }: { ir: (a: Aba) => void }) {
   const hoje = diaIso()
@@ -50,6 +51,7 @@ export function Hoje({ ir }: { ir: (a: Aba) => void }) {
         <h1>{saudacao()}, Paulo</h1>
       </div>
       {erro && <div className="aviso erro">{erro}</div>}
+      <Conversa />
       <Sono />
 
       <section className="bloco">

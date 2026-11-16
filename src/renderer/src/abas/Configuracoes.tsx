@@ -71,7 +71,7 @@ export function Configuracoes({ config: c, chamado }: { config: Config; chamado:
           </Interruptor>
         </Secao>
 
-        <Secao titulo="Inteligência" texto="A Groq entende o que você fala e escreve. Plano grátis.">
+        <Secao titulo="Inteligência" texto={c.nuvem.email ? "Usando a chave da Groq que está na Vercel, pelo login do celular. Colar uma chave aqui é opcional." : "A Groq entende o que você fala e escreve. Entre em Celular (acima) para usar a chave da Vercel, ou cole uma."}>
           <ChaveGroq tem={c.temChaveGroq} mostrar={mostrar} />
           <CampoLinha rotulo="Modelo" valor={c.modelo} aoSalvar={(v) => api.mudarConfig({ modelo: v }).then(() => setAviso({ texto: 'Modelo salvo.' }))} />
         </Secao>

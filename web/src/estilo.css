@@ -142,3 +142,6 @@ details ul { margin: 0; padding: 0 14px 14px 30px; display: grid; gap: 6px; colo
 .semana .dia.pendente { outline: 1px solid var(--azul); color: var(--texto); }
 .semana .dia.fora { opacity: 0.35; }
 select.entrada { appearance: none; }
+.fala-msg { background: var(--dentro); border-radius: 12px; padding: 9px 12px; font-size: 14.5px; line-height: 1.4; justify-self: start; max-width: 92%; }
+.fala-msg.eu { justify-self: end; background: var(--azul-fundo); color: var(--azul-texto); }
+.fala-msg.erro { background: var(--vermelho-fundo); color: var(--vermelho); }
