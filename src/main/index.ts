@@ -10,6 +10,7 @@ import * as dados from './dados'
 import * as google from './google'
 import * as groq from './groq'
 import * as pc from './pc'
+import * as nuvem from './nuvem'
 import { lerJson, gravarJson } from './armazem'
 import { SONO, faseSono, noiteDe } from '../shared/sono'
 import { ehPrivado, FORMATOS_PRIVADOS } from '../shared/copias'
@@ -253,6 +254,28 @@ function verificarHabitos() {
   }
 }
 
+// ---------- nuvem (tarefas e hábitos iguais no celular) ----------
+function aoConectarNuvem() {
+  if (!nuvem.conectado()) return
+  if (!config.ler().nuvemSubiu) {
+    dados.subirTudo()
+    config.gravar({ nuvemSubiu: true })
+  }
+  void sincronizar()
+}
+let sincronizando = false
+async function sincronizar() {
+  if (sincronizando || !nuvem.conectado()) return
+  sincronizando = true
+  try {
+    for (const o of await dados.puxarNuvem()) mudou(o)
+  } catch {
+    // sem internet: tenta de novo na próxima volta
+  } finally {
+    sincronizando = false
+  }
+}
+
 // ---------- sono (21h30 aviso, 22h tela quente, 22h30 o PC suspende; adiável e registrado) ----------
 type NoiteSono = { noite: string; avisou?: boolean; tela?: boolean; adiamentos: number; adiadoAte?: string; suspendeuEm?: string[] }
 let prazoSuspender: number | null = null
@@ -373,6 +396,7 @@ function configuracoes(): Configuracoes {
     pastasClaude: c.pastasClaude,
     posicao: c.posicao,
     silenciarAvisos: c.silenciarAvisos,
+    nuvem: { email: nuvem.conectado() },
     modeloVozDisponivel: existsSync(join(recursos(), 'voz', 'modelo-pt.tar.gz')),
   }
 }
@@ -768,6 +792,11 @@ function ligarIpc() {
     gravarNoite({ ...x, adiamentos: x.adiamentos + 1, adiadoAte: new Date(agora.getTime() + SONO.adiar * 60_000).toISOString() })
     prazoSuspender = null
   })
+  h('entrarNuvem', async (_e, email: unknown, senha: unknown) => {
+    if (typeof email !== 'string' || typeof senha !== 'string' || !email.includes('@') || !senha) return { ok: false, erro: 'Preencha e-mail e senha.' }
+    return nuvem.entrar(email.trim().slice(0, 200), senha.slice(0, 200))
+  })
+  h('sairNuvem', () => nuvem.sair())
   h('suspenderAgora', () => suspenderPorSono(new Date()))
   h('pcEstado', () => pc.estado())
   h('pc', (_e, pedido: unknown) => {
@@ -812,6 +841,11 @@ app.whenReady().then(() => {
   setInterval(verificarEventos, 15_000)
   setInterval(verificarHabitos, 30_000)
   setInterval(verificarSono, 15_000)
+  void nuvem.iniciar(() => {
+    aoConectarNuvem()
+    mudou('config')
+  }).then(aoConectarNuvem)
+  setInterval(sincronizar, 20_000)
   setInterval(vigiarCopias, 800)
   setInterval(lerAgenda, 5 * 60_000)
   setTimeout(verificarLembretes, 3000)

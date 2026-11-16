@@ -5,16 +5,20 @@ import { Hoje } from './Hoje'
 import { TreinoTela } from './TreinoTela'
 import { Comida } from './Comida'
 import { Corpo } from './Corpo'
+import { Tarefas } from './Tarefas'
+import { Habitos } from './Habitos'
 
-export type Aba = 'hoje' | 'treino' | 'comida' | 'corpo'
+export type Aba = 'hoje' | 'tarefas' | 'habitos' | 'treino' | 'comida' | 'corpo'
 
 const ICONES: Record<Aba, React.JSX.Element> = {
   hoje: <path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" />,
+  tarefas: <path d="M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2" />,
+  habitos: <path d="M12 3v3M12 18v3M3 12h3M18 12h3M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" />,
   treino: <path d="M6 7v10M18 7v10M3 10v4M21 10v4M6 12h12" />,
   comida: <path d="M4 11h16a8 8 0 0 1-16 0zM12 3v4M8 5v2M16 5v2" />,
   corpo: <path d="M4 19h16M7 16V9M12 16V5M17 16v-4" />,
 }
-const NOMES: Record<Aba, string> = { hoje: 'Hoje', treino: 'Treino', comida: 'Comida', corpo: 'Corpo' }
+const NOMES: Record<Aba, string> = { hoje: 'Hoje', tarefas: 'Tarefas', habitos: 'Hábitos', treino: 'Treino', comida: 'Comida', corpo: 'Corpo' }
 
 export function App() {
   const [sessao, setSessao] = useState<Session | null | undefined>(undefined)
@@ -41,6 +45,8 @@ export function App() {
     <div className="app">
       <main className="tela" key={`${aba}-${versao}`}>
         {aba === 'hoje' && <Hoje ir={ir} />}
+        {aba === 'tarefas' && <Tarefas />}
+        {aba === 'habitos' && <Habitos />}
         {aba === 'treino' && <TreinoTela />}
         {aba === 'comida' && <Comida />}
         {aba === 'corpo' && <Corpo />}

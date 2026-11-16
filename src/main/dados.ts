@@ -1,6 +1,7 @@
 // Tarefas, atalhos, cópias e a agenda guardada: estado em memória + arquivo JSON no PC.
 import { randomUUID } from 'node:crypto'
 import { gravarJson, lerJson } from './armazem'
+import { colecao } from './nuvem'
 import { adicionarCopia, podar } from '../shared/copias'
 import { limparAntigas, ordenar } from '../shared/tarefas'
 import type { Habito } from '../shared/habitos'
@@ -60,9 +61,14 @@ export const ler = {
   avisosHabitos: () => avisosHabitos,
 }
 
+const nuvemTarefas = colecao<Tarefa>('tarefas', 'tarefas')
+const nuvemHabitos = colecao<Habito>('habitos', 'habitos')
+
 export function mudarHabitos(f: (h: Habito[]) => Habito[]) {
+  const antes = habitos
   habitos = f(habitos)
   gravarJson('habitos', habitos)
+  nuvemHabitos.mudou(antes, habitos)
 }
 
 export function marcarAvisoHabito(id: string, em: Date) {
@@ -71,8 +77,35 @@ export function marcarAvisoHabito(id: string, em: Date) {
 }
 
 export function mudarTarefas(f: (t: Tarefa[]) => Tarefa[]) {
+  const antes = tarefas
   tarefas = ordenar(f(tarefas))
   gravarJson('tarefas', tarefas)
+  nuvemTarefas.mudou(antes, tarefas)
+}
+
+// Primeira conexão com a nuvem: o que está no PC sobe (sem passar por cima do que já está lá).
+export function subirTudo() {
+  nuvemTarefas.subirTudo(tarefas)
+  nuvemHabitos.subirTudo(habitos)
+}
+
+// Traz o que mudou no celular. Devolve o que trocou, para avisar a tela.
+export async function puxarNuvem(): Promise<('tarefas' | 'habitos')[]> {
+  const mudou: ('tarefas' | 'habitos')[] = []
+  const t = await nuvemTarefas.puxar()
+  if (t && JSON.stringify(ordenar(t)) !== JSON.stringify(tarefas)) {
+    tarefas = ordenar(t)
+    gravarJson('tarefas', tarefas)
+    mudou.push('tarefas')
+  }
+  const h = await nuvemHabitos.puxar()
+  const ordemH = (l: Habito[]) => [...l].sort((a, b) => a.criadoEm.localeCompare(b.criadoEm))
+  if (h && JSON.stringify(ordemH(h)) !== JSON.stringify(ordemH(habitos))) {
+    habitos = ordemH(h)
+    gravarJson('habitos', habitos)
+    mudou.push('habitos')
+  }
+  return mudou
 }
 
 export function mudarAtalhos(f: (a: Atalho[]) => Atalho[]) {

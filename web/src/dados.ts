@@ -53,6 +53,16 @@ export async function ultimaVez(exercicio: string, antesDe: string): Promise<{ d
 export const lerDias = (desde: string) => ok<Dia[]>(supabase.from('dias').select('dia,peso,passos,deitou,acordou').gte('dia', desde).order('dia'))
 export const salvarDia = (d: Partial<Dia> & { dia: string }) => ok(supabase.from('dias').upsert(d, { onConflict: 'dono,dia' }))
 
+// Tarefas e hábitos: os mesmos do PC (uma linha por item; apagado em vez de apagar, para o PC saber).
+export async function lerItens<T extends { id: string }>(tabela: 'tarefas' | 'habitos'): Promise<T[]> {
+  const l = await ok<{ id: string; dados: T }[]>(supabase.from(tabela).select('id,dados').eq('apagado', false))
+  return l.map((x) => ({ ...x.dados, id: x.id }))
+}
+export const salvarItem = <T extends { id: string }>(tabela: 'tarefas' | 'habitos', x: T) =>
+  ok(supabase.from(tabela).upsert({ id: x.id, dados: x, apagado: false, atualizado_em: new Date().toISOString() }, { onConflict: 'dono,id' }))
+export const apagarItem = (tabela: 'tarefas' | 'habitos', id: string) =>
+  ok(supabase.from(tabela).upsert({ id, dados: {}, apagado: true, atualizado_em: new Date().toISOString() }, { onConflict: 'dono,id' }))
+
 // Séries de trabalho do exercício antes de hoje, para a evolução (até ~3 meses de treinos).
 export const historico = (exercicio: string, antesDe: string) =>
   ok<Serie[]>(supabase.from('series').select('*').eq('exercicio', exercicio).eq('aquecimento', false).lt('dia', antesDe).order('dia', { ascending: false }).limit(150))

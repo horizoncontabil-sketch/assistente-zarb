@@ -27,6 +27,10 @@ export function Configuracoes({ config: c, chamado }: { config: Config; chamado:
       <Titulo titulo="Configurações" />
       {aviso && <Mensagem erro={aviso.erro}>{aviso.texto}</Mensagem>}
       <div className="rolagem">
+        <Secao titulo="Celular" texto="Tarefas e hábitos iguais no PC e no app do iPhone. Entre com o mesmo e-mail e senha do app.">
+          <Nuvem c={c} mostrar={mostrar} />
+        </Secao>
+
         <Secao titulo="Conta Google" texto="Agenda do dia, aviso antes das reuniões e eventos marcados falando.">
           <Google c={c} mostrar={mostrar} />
         </Secao>
@@ -340,5 +344,39 @@ function Versao({ c }: { c: Config }) {
         {texto}
       </span>
     </div>
+  )
+}
+
+function Nuvem({ c, mostrar }: { c: Config; mostrar: Mostrar }) {
+  const [email, setEmail] = useState('')
+  const [senha, setSenha] = useState('')
+  const [indo, setIndo] = useState(false)
+  if (c.nuvem.email)
+    return (
+      <div className="linha">
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--verde)' }} />
+        <span style={{ flex: 1 }}>Ligado ao celular como {c.nuvem.email}</span>
+        <button type="button" className="link" onClick={() => api.sairNuvem()}>
+          Sair
+        </button>
+      </div>
+    )
+  return (
+    <form
+      className="formulario"
+      onSubmit={async (e) => {
+        e.preventDefault()
+        setIndo(true)
+        mostrar(await api.entrarNuvem(email, senha), 'Ligado ao celular. O que está no PC sobe agora.')
+        setIndo(false)
+        setSenha('')
+      }}
+    >
+      <input className="campo-texto" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="E-mail do app do celular" aria-label="E-mail" autoComplete="email" />
+      <input className="campo-texto" type="password" value={senha} onChange={(e) => setSenha(e.target.value)} placeholder="Senha" aria-label="Senha" autoComplete="current-password" />
+      <button type="submit" className="botao principal" disabled={indo || !email || !senha} style={{ alignSelf: 'flex-start' }}>
+        {indo ? 'Entrando…' : 'Entrar'}
+      </button>
+    </form>
   )
 }

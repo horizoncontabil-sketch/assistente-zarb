@@ -29,6 +29,7 @@
     "vosk-browser": "^0.0.8"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.49.4",
     "electron-updater": "^6.8.11"
   }
 }

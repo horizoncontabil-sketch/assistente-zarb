@@ -19,6 +19,7 @@ export type Gravado = {
   posicao: Posicao
   silenciarAvisos: boolean
   googleClientId?: string
+  nuvemSubiu?: boolean // o que estava no PC já subiu para a nuvem
   // Segredos cifrados pelo Windows (DPAPI, via safeStorage), em base64. Nunca em texto puro.
   groqCifrada?: string
   googleSegredoCifrado?: string

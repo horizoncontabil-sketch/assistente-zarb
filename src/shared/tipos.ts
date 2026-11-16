@@ -57,6 +57,7 @@ export type Configuracoes = {
   modeloVozDisponivel: boolean
   posicao: Posicao
   silenciarAvisos: boolean
+  nuvem: { email: string | null }
 }
 
 export type MudancaConfig = Partial<
@@ -162,6 +163,8 @@ export type ApiAssistente = {
   apagarHabito(id: string): Promise<void>
   registrarHabito(id: string, delta: number): Promise<void>
   adiarSono(): Promise<void>
+  entrarNuvem(email: string, senha: string): Promise<Ok>
+  sairNuvem(): Promise<void>
   suspenderAgora(): Promise<void>
   // saúde
   saude(): Promise<Saude>
