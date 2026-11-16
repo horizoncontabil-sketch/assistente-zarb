@@ -234,7 +234,7 @@ export function App() {
           fechar={() => setExpandido(false)}
         />
       ) : (modo === 'alerta' || modo === 'toque') && aviso ? (
-        <Avisos aviso={aviso} agora={agora} fechar={tirarAviso} marca={marca} mais={avisos.length - 1} />
+        <Avisos aviso={aviso} agora={agora} fechar={tirarAviso} marca={marca} mais={avisos.length - 1} abrir={(a) => { tirarAviso(); abrirPainel(a) }} />
       ) : modo === 'voz' ? (
         <div className="pilula" aria-live="polite">
           {marca}
@@ -343,7 +343,7 @@ function medidas(modo: string, pos: Pos, comPergunta = false): CSSProperties {
 }
 
 function chave(a: Aviso) {
-  return a.tipo === 'lembrete' ? `t${a.tarefa.id}` : a.tipo === 'habito' ? `h${a.habito.id}` : a.tipo === 'sono' ? `s${a.fase}${a.prazo ?? ''}` : `e${a.evento.id}${a.marco}`
+  return a.tipo === 'lembrete' ? `t${a.tarefa.id}` : a.tipo === 'habito' ? `h${a.habito.id}` : a.tipo === 'sono' ? `s${a.fase}${a.prazo ?? ''}` : a.tipo === 'bomdia' || a.tipo === 'marmita' || a.tipo === 'atrasadas' ? `i${a.tipo}${a.tipo === 'marmita' ? a.refeicao : ''}` : `e${a.evento.id}${a.marco}`
 }
 
 // Desfazer do toast: só o que foi criado ou marcado agora.

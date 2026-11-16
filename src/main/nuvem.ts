@@ -43,7 +43,7 @@ export async function entrar(e: string, senha: string): Promise<{ ok: true } | {
 export const sair = () => db.auth.signOut()
 
 // Uma coleção sincronizada (tarefas ou hábitos). Guarda localmente o que ainda não subiu.
-export function colecao<T extends { id: string }>(tabela: 'tarefas' | 'habitos', arquivoLocal: string) {
+export function colecao<T extends { id: string }>(tabela: 'tarefas' | 'habitos' | 'plano' | 'receitas' | 'alimentos_meus', arquivoLocal: string) {
   const arqPend = `${arquivoLocal}-pendentes`
   let pendentes: Pendentes<T> = lerJson<Pendentes<T>>(arqPend, {})
   const guardar = () => gravarJson(arqPend, pendentes)
@@ -85,3 +85,57 @@ export function colecao<T extends { id: string }>(tabela: 'tarefas' | 'habitos',
     },
   }
 }
+
+// Coleção gravada em tabela própria do celular (refeições, registro do dia): o aparelho só traduz as linhas.
+// O que está pendente no PC vale até subir; depois, vale a nuvem.
+export type Tradutor<T extends { id: string }> = {
+  ler: () => Promise<T[] | null>
+  gravar: (x: T) => Promise<boolean>
+  apagar: (id: string) => Promise<boolean>
+}
+export function colecaoMapeada<T extends { id: string }>(arquivoLocal: string, t: Tradutor<T>) {
+  const arqPend = `${arquivoLocal}-pendentes`
+  let pendentes: Pendentes<T> = lerJson<Pendentes<T>>(arqPend, {})
+  const guardar = () => gravarJson(arqPend, pendentes)
+  let subindo = false
+  return {
+    mudou(antes: T[], depois: T[]) {
+      pendentes = { ...pendentes, ...diferencas(antes, depois, new Date().toISOString()) }
+      guardar()
+      void this.subir()
+    },
+    subirTudo(itens: T[]) {
+      const em = new Date(0).toISOString()
+      for (const x of itens) if (!pendentes[x.id]) pendentes[x.id] = { dados: x, em }
+      guardar()
+    },
+    async subir() {
+      if (!email || subindo) return
+      subindo = true
+      try {
+        for (const [id, p] of Object.entries(pendentes)) {
+          const ok = p.dados ? await t.gravar(p.dados) : await t.apagar(id)
+          if (!ok) return
+          if (pendentes[id]?.em === p.em) {
+            const { [id]: _, ...resto } = pendentes
+            pendentes = resto
+            guardar()
+          }
+        }
+      } catch {
+        // sem internet: tenta de novo na próxima volta
+      } finally {
+        subindo = false
+      }
+    },
+    async puxar(): Promise<T[] | null> {
+      if (!email) return null
+      await this.subir()
+      const l = await t.ler()
+      if (!l) return null
+      return aplicarRemoto(l.map((dados) => ({ id: dados.id, dados, apagado: false, atualizado_em: '' })), pendentes)
+    },
+  }
+}
+
+export const deu = (r: { error: unknown }) => !r.error

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, Notification, screen, shell, Tray } from 'electron'
+import { app, powerMonitor, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, Notification, screen, shell, Tray } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -14,7 +14,12 @@ import * as nuvem from './nuvem'
 import { lerJson, gravarJson } from './armazem'
 import { SONO, faseSono, noiteDe } from '../shared/sono'
 import { ehPrivado, FORMATOS_PRIVADOS } from '../shared/copias'
-import { descreverQuando } from '../shared/datas'
+import { descreverQuando, diaLocal, hora, mesmoDia } from '../shared/datas'
+import { eventosDoDia } from '../shared/google'
+import { iniciativasAgora, type Feitos } from '../shared/iniciativa'
+import { treinoDoDia } from '../shared/treino'
+import { REFEICOES_PADRAO } from '../shared/refeicoesPadrao'
+import type { Refeicao } from '../shared/alimentacao'
 import { linkSeguro } from '../shared/destino'
 import { eventosParaAvisar } from '../shared/google'
 import { lembretesDeHabito, registrar as registrarNoHabito, TODO_DIA, type Habito } from '../shared/habitos'
@@ -261,6 +266,10 @@ function aoConectarNuvem() {
     dados.subirTudo()
     config.gravar({ nuvemSubiu: true })
   }
+  if (!config.ler().nuvemSubiuSaude) {
+    dados.subirSaude()
+    config.gravar({ nuvemSubiuSaude: true })
+  }
   void sincronizar()
 }
 let sincronizando = false
@@ -273,6 +282,55 @@ async function sincronizar() {
     // sem internet: tenta de novo na próxima volta
   } finally {
     sincronizando = false
+  }
+}
+
+// ---------- iniciativa (bom dia, marmita, atrasadas) ----------
+async function noiteRegistrada(dia: string): Promise<boolean> {
+  if (!nuvem.conectado()) return true // sem nuvem não há onde guardar: não pergunta
+  const r = await nuvem.db.from('dias').select('deitou').eq('dia', dia).maybeSingle()
+  return !!r.data?.deitou
+}
+let verificandoIniciativa = false
+async function verificarIniciativa() {
+  if (verificandoIniciativa) return
+  verificandoIniciativa = true
+  try {
+    const agora = new Date()
+    const hoje = diaLocal(agora)
+    const feitos = lerJson<Feitos>('iniciativa', {})
+    const refeicoesHoje = dados.ler.refeicoes().filter((r) => r.dia === hoje)
+    const tarefas = dados.ler.tarefas()
+    const atrasadas = tarefas.filter((t) => !t.feita && t.quando && new Date(t.quando) < agora)
+    const lista = iniciativasAgora(agora, feitos, {
+      usandoAgora: powerMonitor.getSystemIdleTime() < 60,
+      almocoRegistrado: refeicoesHoje.some((r) => r.tipo === 'almoco'),
+      jantarRegistrado: refeicoesHoje.some((r) => r.tipo === 'jantar'),
+      atrasadas: atrasadas.length,
+    })
+    for (const i of lista) {
+      gravarJson('iniciativa', { ...lerJson<Feitos>('iniciativa', {}), [i]: hoje })
+      if (i === 'bomdia') {
+        const eventos = eventosDoDia(dados.ler.agenda().eventos, agora).filter((e) => !e.diaInteiro)
+        const lembretes = tarefas.filter((t) => !t.feita && t.quando && mesmoDia(new Date(t.quando), agora))
+        const treino = treinoDoDia(agora)
+        const linhas = [
+          'Bom dia, Paulo',
+          eventos.length ? `${eventos.length} ${eventos.length === 1 ? 'reunião' : 'reuniões'}, a 1ª às ${hora(new Date(eventos[0].inicio))}` : 'Sem reuniões',
+          `${lembretes.length} ${lembretes.length === 1 ? 'lembrete' : 'lembretes'}`,
+          ...(atrasadas.length ? [`${atrasadas.length} atrasado${atrasadas.length > 1 ? 's' : ''}`] : []),
+          treino ? `Treino: ${treino.nome}` : 'Descanso',
+        ]
+        const pesou = dados.ler.corpo().some((c) => c.dia === hoje && c.peso)
+        enviar({ tipo: 'aviso', aviso: { tipo: 'bomdia', linhas, pedirPeso: !pesou, pedirSono: !(await noiteRegistrada(hoje)) } })
+      } else if (i === 'almoco' || i === 'jantar') {
+        enviar({ tipo: 'aviso', aviso: { tipo: 'marmita', refeicao: i } })
+      } else {
+        enviar({ tipo: 'aviso', aviso: { tipo: 'atrasadas', titulos: atrasadas.map((t) => t.titulo) } })
+      }
+    }
+  } finally {
+    verificandoIniciativa = false
   }
 }
 
@@ -797,6 +855,20 @@ function ligarIpc() {
     return nuvem.entrar(email.trim().slice(0, 200), senha.slice(0, 200))
   })
   h('sairNuvem', () => nuvem.sair())
+  h('registrarSono', async (_e, deitou: unknown) => {
+    if (typeof deitou !== 'string' || !/^\d{2}:\d{2}$/.test(deitou)) return { ok: false, erro: 'Horário inválido.' }
+    if (!nuvem.conectado()) return { ok: false, erro: 'Ligue o PC ao celular em Configurações para guardar o sono.' }
+    const r = await nuvem.db.from('dias').upsert({ dia: diaLocal(new Date()), deitou, acordou: SONO.acordar }, { onConflict: 'dono,dia' })
+    return r.error ? { ok: false, erro: 'Não deu para salvar. Confira a internet.' } : { ok: true }
+  })
+  h('comiMarmita', (_e, ref: unknown) => {
+    if (ref !== 'almoco' && ref !== 'jantar') return { ok: false, erro: 'Refeição inválida.' }
+    const marmita = REFEICOES_PADRAO.find((r) => r.nome === 'Marmita')!
+    const agora = new Date()
+    dados.mudarRefeicoes((l) => [...l, { id: randomUUID(), dia: diaLocal(agora), tipo: ref, itens: marmita.itens, em: agora.toISOString(), nome: 'Marmita' } as Refeicao])
+    mudou('saude')
+    return { ok: true }
+  })
   h('suspenderAgora', () => suspenderPorSono(new Date()))
   h('pcEstado', () => pc.estado())
   h('pc', (_e, pedido: unknown) => {
@@ -841,6 +913,7 @@ app.whenReady().then(() => {
   setInterval(verificarEventos, 15_000)
   setInterval(verificarHabitos, 30_000)
   setInterval(verificarSono, 15_000)
+  setInterval(() => void verificarIniciativa(), 30_000)
   void nuvem.iniciar(() => {
     aoConectarNuvem()
     mudou('config')
