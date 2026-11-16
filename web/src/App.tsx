@@ -22,6 +22,8 @@ export function App() {
   const [versao, setVersao] = useState(0) // força recarregar a aba ao trocar
 
   useEffect(() => {
+    // Pede ao iPhone para não apagar o que o app guarda (inclui o acesso) quando falta espaço ou o app fica parado.
+    navigator.storage?.persist?.().catch(() => {})
     supabase.auth.getSession().then(({ data }) => setSessao(data.session))
     const { data } = supabase.auth.onAuthStateChange((_e, s) => setSessao(s))
     return () => data.subscription.unsubscribe()
@@ -56,7 +58,7 @@ export function App() {
 }
 
 function Entrar() {
-  const [email, setEmail] = useState('')
+  const [email, setEmail] = useState(() => lerEmail())
   const [senha, setSenha] = useState('')
   const [modo, setModo] = useState<'entrar' | 'criar'>('entrar')
   const [msg, setMsg] = useState<{ texto: string; erro?: boolean } | null>(null)
@@ -70,6 +72,7 @@ function Entrar() {
       if (modo === 'entrar') {
         const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: senha })
         if (error) throw error
+        guardarEmail(email.trim())
       } else {
         if (senha.length < 8) throw new Error('curta')
         const { error } = await supabase.auth.signUp({ email: email.trim(), password: senha })
@@ -91,6 +94,11 @@ function Entrar() {
           <small>Assistente pessoal</small>
           <h1>{modo === 'entrar' ? 'Entrar' : 'Criar seu acesso'}</h1>
         </div>
+        {!noIcone() && (
+          <div className="aviso" role="note">
+            Você está no navegador. O Safari e o ícone da tela de início guardam o acesso separados: entre pelo ícone (Compartilhar, Adicionar à Tela de Início) e ele fica lembrado.
+          </div>
+        )}
         <label className="peq cinza" htmlFor="email">E-mail</label>
         <input id="email" className="entrada" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
         <label className="peq cinza" htmlFor="senha">Senha</label>
@@ -103,4 +111,14 @@ function Entrar() {
       </form>
     </div>
   )
+}
+
+// Aberto pelo ícone da tela de início (não pela aba do Safari).
+const noIcone = () => window.matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true
+
+function lerEmail() {
+  try { return localStorage.getItem('ultimo-email') ?? '' } catch { return '' }
+}
+function guardarEmail(e: string) {
+  try { localStorage.setItem('ultimo-email', e) } catch { /* sem armazenamento: só não pré-preenche */ }
 }
